@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>掌カタログ 表紙作成ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #0f6e6a;
+    --accent-dark: #0b524f;
+    --danger: #c0392b;
+    --bg: #eef2f4;
+    --panel: #ffffff;
+    --text: #263238;
+    --muted: #7a8a90;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: var(--bg);
+    padding: 20px;
+    margin: 0;
+    color: var(--text);
+  }
+  .app-container { max-width: 900px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  h1 {
+    width: 100%;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: 0.02em;
+    margin: 0 0 4px;
+    color: var(--accent-dark);
+  }
+  .note { width: 100%; font-size: 11px; color: var(--muted); margin: 0 0 8px; }
+  .note a { color: var(--accent); font-weight: 700; text-decoration: underline; }
+
+  #form-area { flex: 1 1 340px; min-width: 280px; }
+  .panel {
+    background: var(--panel);
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(15,110,106,0.10);
+    margin-top: 12px;
+    padding: 14px 16px;
+  }
+  .panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0 0 8px;
+  }
+  .panel-subtitle { font-size: 12px; font-weight: 700; color: var(--text); margin: 10px 0 2px; }
+  #form-area label { display: block; margin-top: 8px; font-size: 13px; color: #4a5a5e; }
+  #form-area input[type="text"], #form-area textarea, #form-area select, #form-area input[type="number"] {
+    width: 100%; box-sizing: border-box; padding: 7px 8px; font-size: 13px; margin-top: 3px;
+    border: 1px solid #d5dee0; border-radius: 6px; background: #fbfdfd; font-family: inherit;
+  }
+  #form-area input:focus, #form-area textarea:focus, #form-area select:focus {
+    outline: none; border-color: var(--accent);
+  }
+
+  .checkbox-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .checkbox-row label { margin: 0; font-size: 13px; color: #333; }
+  .color-row { display: flex; gap: 12px; }
+  .color-row > div { flex: 1; }
+  .color-row label { display: block; font-size: 12px; color: #555; margin-bottom: 3px; }
+  input[type="color"] { width: 100%; height: 28px; padding: 0; border: 1px solid #d5dee0; border-radius: 6px; cursor: pointer; }
+
+  .side-block { border-top: 1px dashed #dfe6e7; padding-top: 10px; margin-top: 10px; }
+  .side-block:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
+
+  .btn {
+    width: 100%; padding: 9px; font-size: 12px; font-weight: 700; border: none;
+    background: var(--accent); color: #fff; border-radius: 7px; cursor: pointer; margin-top: 8px;
+    letter-spacing: 0.02em;
+  }
+  .btn:hover { background: var(--accent-dark); }
+  .btn-outline { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+  .btn-outline:hover { background: #eaf5f4; }
+  .btn-danger { background: #fff; color: var(--danger); border: 1px solid var(--danger); }
+  .btn-danger:hover { background: #fdecea; }
+  .btn-danger.armed { background: var(--danger); color: #fff; }
+
+  .status-text { font-size: 11px; color: var(--muted); margin-top: 6px; min-height: 14px; }
+
+  #preview-area { flex: 0 0 420px; width: 420px; min-width: 0; position: sticky; top: 16px; }
+  .preview-panel {
+    background: var(--panel);
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(15,110,106,0.10);
+    padding: 12px;
+  }
+  #preview-label {
+    font-size: 11px; font-weight: 700; color: var(--accent);
+    letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  canvas { border: 1px solid #d5dee0; border-radius: 6px; background: #fff; cursor: grab; touch-action: none;
+    width: 100%; height: auto; aspect-ratio: 812 / 400; display: block; }
+  canvas.dragging { cursor: grabbing; }
+
+  footer { width: 100%; box-sizing: border-box; margin-top: 20px; padding-top: 12px; border-top: 1px solid #dfe6e7;
+    text-align: center; font-size: 11px; color: var(--muted); }
+
+  .usage-notice {
+    width: 100%; box-sizing: border-box; margin-top: 16px;
+    background: var(--panel); border-left: 4px solid var(--danger); border-radius: 8px;
+    padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 12px;
+    align-items: center; justify-content: space-between;
+    box-shadow: 0 1px 4px rgba(15,110,106,0.10);
+  }
+  .usage-notice-text { flex: 1 1 260px; }
+  .usage-notice-title { font-weight: 700; margin: 0 0 6px; color: var(--text); font-size: 13px; }
+  .usage-notice-list { margin: 0; padding-left: 18px; font-size: 12px; color: #555; line-height: 1.7; }
+  .usage-notice-link { font-size: 12px; font-weight: 700; color: var(--danger); text-decoration: underline; white-space: nowrap; }
+
+  @media (max-width: 900px) {
+    .app-container { flex-direction: column; }
+    #preview-area { order: -1; position: sticky; top: 0; width: 100%; flex: none; z-index: 10; background: var(--bg); padding-bottom: 6px; }
+    #form-area { width: 100%; flex: none; min-width: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="app-container">
+  <h1>掌カタログ 表紙作成ツール</h1>
+  <p class="note">アップロードした画像はこのページ内でのみ使用され、送信・保存は行われません。表紙・裏表紙をまとめた見開き（仕上がり14.2cm×7cm）を1つ作成します。</p>
+  <p class="note">使い方に迷ったら、HS書架様の <a href="https://note.com/hs_syoka/n/n90b6101dbedb" target="_blank" rel="noopener">「カタログの作り方」のページ ↗</a> もご参考ください。</p>
+  <p class="note">入力内容はこのブラウザ内に自動保存されます（他の端末とは共有されません）。<span id="autosaveStatus"></span></p>
+  <div class="checkbox-row" style="width:100%;">
+    <input type="checkbox" id="inputAutoRestore" checked>
+    <label for="inputAutoRestore">次回このページを開いたときに自動で復元する</label>
+    <button type="button" id="btnLoadAutosave" class="btn btn-outline" style="width:auto; margin:0 0 0 auto; padding:6px 12px;">保存内容を読み込む</button>
+  </div>
+
+  <div id="preview-area">
+    <div class="preview-panel">
+      <div id="preview-label">プレビュー（見開き 14.2cm×7cm）</div>
+      <p class="note" style="margin-top:-4px;">緑色の丸印（⁚）はドラッグ移動できる目印です。</p>
+      <canvas id="cardCanvas" width="812" height="400"></canvas>
+      <button type="button" id="btnDownloadPng" class="btn" style="margin-top:10px;">見開き画像をダウンロード（PNG）</button>
+    </div>
+  </div>
+
+  <div id="form-area">
+
+    <div class="panel">
+      <p class="panel-title">表紙側（右半分）</p>
+      <div class="checkbox-row">
+        <input type="checkbox" id="inputFrontImageEnable" checked>
+        <label for="inputFrontImageEnable">画像を配置する</label>
+      </div>
+      <label>画像を選ぶ
+        <input type="file" id="inputFrontImage" accept="image/*">
+      </label>
+      <label>拡大率
+        <input type="range" id="inputFrontZoom" min="0.5" max="1.5" step="0.01" value="1">
+      </label>
+      <label>カタログ名（初期配置：中央）
+        <input type="text" id="inputCatalogName">
+      </label>
+      <p class="note" style="margin-top:6px;">画像エリア内をドラッグすると切り抜き位置を、カタログ名の枠をドラッグすると配置を調整できます。</p>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">裏表紙側（左半分）</p>
+      <div class="checkbox-row">
+        <input type="checkbox" id="inputBackImageEnable" checked>
+        <label for="inputBackImageEnable">画像を配置する</label>
+      </div>
+      <label>画像を選ぶ
+        <input type="file" id="inputBackImage" accept="image/*">
+      </label>
+      <label>拡大率
+        <input type="range" id="inputBackZoom" min="0.5" max="1.5" step="0.01" value="1">
+      </label>
+      <label>一文記載
+        <input type="text" id="inputBackText">
+      </label>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">その他</p>
+      <label>フォント
+        <select id="inputFont">
+          <option value="'Noto Sans JP', sans-serif">ゴシック体</option>
+          <option value="'Noto Serif JP', serif">明朝体</option>
+        </select>
+      </label>
+      <div class="color-row" style="margin-top:10px;">
+        <div><label>背景色</label><input type="color" id="inputCardColor" value="#ffffff"></div>
+        <div><label>文字色</label><input type="color" id="inputFontColor" value="#222222"></div>
+      </div>
+    </div>
+
+    <button type="button" id="btnClear" class="btn btn-danger">入力内容をクリア</button>
+    <button type="button" id="btnRestoreBackup" class="btn btn-outline" style="display:none;">クリア直前の内容を復元</button>
+
+    <div class="panel">
+      <p class="panel-title">作業データの保存／読込</p>
+      <button type="button" id="btnExportJson" class="btn btn-outline">JSONで保存（画像込み・後日再開用）</button>
+      <label>JSONを読み込む
+        <input type="file" id="inputJsonLoad" accept="application/json">
+      </label>
+      <div id="jsonStatus" class="status-text"></div>
+    </div>
+
+  </div>
+
+  <div class="panel" style="width:100%; box-sizing:border-box;">
+    <p class="panel-title">面付画像（A4・トンボ付き）</p>
+    <label>A4 1枚あたりの部数
+      <input type="number" id="inputCopies" min="1" max="12" value="3">
+    </label>
+    <p class="note" style="margin-top:4px;">部数がA4に入りきらない場合は、自動的にページが追加されます。表紙は片面印刷のみで、中央の点線が折り位置です。</p>
+    <button type="button" id="btnExportPdf" class="btn btn-outline">面付画像を出力（A4・PNG）</button>
+    <p class="note" style="margin-top:4px;">印刷時は「実際のサイズ」「100%」を選んでください（自動縮小/拡大を選ぶとサイズがずれます）。</p>
+  </div>
+
+  <footer>掌カタログ 表紙作成ツール（試作版）</footer>
+
+  <div class="usage-notice">
+    <div class="usage-notice-text">
+      <p class="usage-notice-title">ご利用にあたって</p>
+      <ul class="usage-notice-list">
+        <li>本ツールのカードテンプレートは、HS書架様の原案を参考にしています。</li>
+        <li>本ツールの不具合等について、HS書架様は関与・保証いたしません。</li>
+        <li>免責事項の詳細は「利用規約・免責事項を確認する」のリンクをご確認ください。</li>
+      </ul>
+    </div>
+    <a class="usage-notice-link" href="https://github.com/kanashiki1979/terms" target="_blank" rel="noopener">利用規約・免責事項を確認する ↗</a>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById('cardCanvas');
+  const ctx = canvas.getContext('2d');
+  let activeCtx = ctx;
+  const CARD_W = 812, CARD_H = 400;
+  const FOLD_X = CARD_W / 2;
+
+  const inputFrontImageEnable = document.getElementById('inputFrontImageEnable');
+  const inputFrontImage = document.getElementById('inputFrontImage');
+  const inputFrontZoom = document.getElementById('inputFrontZoom');
+  const inputCatalogName = document.getElementById('inputCatalogName');
+  const inputBackImageEnable = document.getElementById('inputBackImageEnable');
+  const inputBackImage = document.getElementById('inputBackImage');
+  const inputBackZoom = document.getElementById('inputBackZoom');
+  const inputBackText = document.getElementById('inputBackText');
+  const inputFont = document.getElementById('inputFont');
+  const inputCardColor = document.getElementById('inputCardColor');
+  const inputFontColor = document.getElementById('inputFontColor');
+  const btnClear = document.getElementById('btnClear');
+  const btnRestoreBackup = document.getElementById('btnRestoreBackup');
+  const autosaveStatus = document.getElementById('autosaveStatus');
+  const inputAutoRestore = document.getElementById('inputAutoRestore');
+  const btnLoadAutosave = document.getElementById('btnLoadAutosave');
+  const btnDownloadPng = document.getElementById('btnDownloadPng');
+  const inputCopies = document.getElementById('inputCopies');
+  const btnExportPdf = document.getElementById('btnExportPdf');
+  const btnExportJson = document.getElementById('btnExportJson');
+  const inputJsonLoad = document.getElementById('inputJsonLoad');
+  const jsonStatus = document.getElementById('jsonStatus');
+
+  let frontImg = null, backImg = null;
+  let frontDragX = 0, frontDragY = 0;
+  let backDragX = 0, backDragY = 0;
+
+  const defaultLayout = () => ({
+    frontImage: { x: FOLD_X + 16, y: 16, w: CARD_W - FOLD_X - 32, h: 280 },
+    catalogName:{ x: FOLD_X + 16, y: 306, w: CARD_W - FOLD_X - 32, h: 78 },
+    backImage:  { x: 16, y: 16, w: FOLD_X - 32, h: 280 },
+    backText:   { x: 16, y: 306, w: FOLD_X - 32, h: 78 }
+  });
+  let layout = defaultLayout();
+
+  function fontFamily() { return inputFont.value; }
+  function hasCatalogName() { return inputCatalogName.value.trim() !== ''; }
+  function hasBackText() { return inputBackText.value.trim() !== ''; }
+
+  function wrapLines(text, maxWidth) {
+    const lines = [];
+    text.split('\n').forEach(p => {
+      let line = '';
+      for (let i = 0; i < p.length; i++) {
+        const test = line + p[i];
+        if (activeCtx.measureText(test).width > maxWidth && line !== '') { lines.push(line); line = p[i]; }
+        else line = test;
+      }
+      lines.push(line);
+    });
+    return lines;
+  }
+
+  function getCoverScale(img, w, h) { return Math.max(w / img.width, h / img.height); }
+
+  function drawImageCover(img, areaX, areaY, areaW, areaH, zoom, offX, offY) {
+    const scale = getCoverScale(img, areaW, areaH) * zoom;
+    const dw = img.width * scale, dh = img.height * scale;
+    let dx = areaX + (areaW - dw) / 2 + offX;
+    let dy = areaY + (areaH - dh) / 2 + offY;
+    if (dw > areaW) dx = Math.max(areaX + areaW - dw, Math.min(areaX, dx));
+    if (dh > areaH) dy = Math.max(areaY + areaH - dh, Math.min(areaY, dy));
+    activeCtx.save();
+    activeCtx.beginPath();
+    activeCtx.rect(areaX, areaY, areaW, areaH);
+    activeCtx.clip();
+    activeCtx.drawImage(img, dx, dy, dw, dh);
+    activeCtx.restore();
+  }
+
+  function drawImageZone(enabled, img, zone, zoom, offX, offY, exportMode) {
+    if (!enabled) return;
+    if (img) {
+      drawImageCover(img, zone.x, zone.y, zone.w, zone.h, zoom, offX, offY);
+      if (!exportMode) {
+        activeCtx.strokeStyle = '#ccc';
+        activeCtx.strokeRect(zone.x, zone.y, zone.w, zone.h);
+      }
+    } else if (!exportMode) {
+      activeCtx.fillStyle = '#ddd';
+      activeCtx.fillRect(zone.x, zone.y, zone.w, zone.h);
+      activeCtx.fillStyle = '#888';
+      activeCtx.font = '13px ' + fontFamily();
+      activeCtx.textAlign = 'center';
+      activeCtx.fillText('画像未設定', zone.x + zone.w / 2, zone.y + zone.h / 2);
+      activeCtx.textAlign = 'left';
+    }
+  }
+
+  function drawCard(exportMode) {
+    const bg = inputCardColor.value;
+    const fc = inputFontColor.value;
+
+    activeCtx.clearRect(0, 0, CARD_W, CARD_H);
+    activeCtx.fillStyle = bg;
+    activeCtx.fillRect(0, 0, CARD_W, CARD_H);
+    activeCtx.strokeStyle = '#333';
+    activeCtx.strokeRect(2, 2, CARD_W - 4, CARD_H - 4);
+
+    // fold guide (screen only, never exported)
+    if (!exportMode) {
+      activeCtx.save();
+      activeCtx.strokeStyle = '#bbb';
+      activeCtx.setLineDash([4, 4]);
+      activeCtx.beginPath();
+      activeCtx.moveTo(FOLD_X, 0);
+      activeCtx.lineTo(FOLD_X, CARD_H);
+      activeCtx.stroke();
+      activeCtx.restore();
+    }
+
+    drawImageZone(inputBackImageEnable.checked, backImg, layout.backImage, parseFloat(inputBackZoom.value), backDragX, backDragY, exportMode);
+    drawImageZone(inputFrontImageEnable.checked, frontImg, layout.frontImage, parseFloat(inputFrontZoom.value), frontDragX, frontDragY, exportMode);
+
+    if (hasCatalogName()) {
+      const z = layout.catalogName;
+      activeCtx.fillStyle = fc;
+      activeCtx.font = 'bold 26px ' + fontFamily();
+      activeCtx.textAlign = 'center';
+      const lines = wrapLines(inputCatalogName.value, z.w);
+      const lineH = 32;
+      const startY = z.y + z.h / 2 - ((lines.length - 1) * lineH) / 2 + 8;
+      lines.slice(0, 3).forEach((line, i) => activeCtx.fillText(line, z.x + z.w / 2, startY + i * lineH));
+      activeCtx.textAlign = 'left';
+    }
+
+    if (hasBackText()) {
+      const z = layout.backText;
+      activeCtx.fillStyle = fc;
+      activeCtx.font = '15px ' + fontFamily();
+      const lines = wrapLines(inputBackText.value, z.w);
+      lines.slice(0, 3).forEach((line, i) => activeCtx.fillText(line, z.x, z.y + 20 + i * 20));
+    }
+
+    if (!exportMode) {
+      activeCtx.save();
+      activeCtx.font = '11px ' + fontFamily();
+      activeCtx.fillStyle = 'rgba(15,110,106,0.35)';
+      activeCtx.textAlign = 'center';
+      activeCtx.fillText('裏表紙側', FOLD_X / 2, 30);
+      activeCtx.fillText('表紙側', FOLD_X + FOLD_X / 2, 30);
+      activeCtx.textAlign = 'left';
+      activeCtx.restore();
+
+      if (inputFrontImageEnable.checked) drawDragHandle(layout.frontImage.x - 10, layout.frontImage.y - 10);
+      if (inputBackImageEnable.checked) drawDragHandle(layout.backImage.x - 10, layout.backImage.y - 10);
+      if (hasCatalogName()) drawDragHandle(layout.catalogName.x - 10, layout.catalogName.y - 10);
+      if (hasBackText()) drawDragHandle(layout.backText.x - 10, layout.backText.y - 10);
+    }
+  }
+
+  function drawDragHandle(x, y) {
+    activeCtx.save();
+    activeCtx.beginPath();
+    activeCtx.arc(x, y, 10, 0, Math.PI * 2);
+    activeCtx.fillStyle = 'rgba(15,110,106,0.8)';
+    activeCtx.fill();
+    activeCtx.fillStyle = '#fff';
+    [[-4, -4], [0, -4], [4, -4], [-4, 0], [0, 0], [4, 0], [-4, 4], [0, 4], [4, 4]].forEach(([ox, oy]) => {
+      activeCtx.beginPath();
+      activeCtx.arc(x + ox, y + oy, 1.3, 0, Math.PI * 2);
+      activeCtx.fill();
+    });
+    activeCtx.restore();
+  }
+
+  function pointInRect(px, py, r) { return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h; }
+
+  let dragMode = null;
+  let dragStart = { x: 0, y: 0 };
+  let blockStart = { x: 0, y: 0 };
+
+  function canvasPoint(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+  }
+
+  function hitTest(px, py) {
+    if (hasCatalogName() && pointInRect(px, py, layout.catalogName)) return 'catalogName';
+    if (hasBackText() && pointInRect(px, py, layout.backText)) return 'backText';
+    if (inputFrontImageEnable.checked && pointInRect(px, py, layout.frontImage)) return 'frontImage';
+    if (inputBackImageEnable.checked && pointInRect(px, py, layout.backImage)) return 'backImage';
+    return null;
+  }
+
+  function startDrag(clientX, clientY) {
+    const p = canvasPoint(clientX, clientY);
+    const hit = hitTest(p.x, p.y);
+    if (!hit) return;
+    dragMode = hit;
+    dragStart = p;
+    if (hit === 'frontImage') blockStart = { x: frontDragX, y: frontDragY };
+    else if (hit === 'backImage') blockStart = { x: backDragX, y: backDragY };
+    else blockStart = { x: layout[hit].x, y: layout[hit].y };
+    canvas.classList.add('dragging');
+  }
+
+  function moveDrag(clientX, clientY) {
+    if (!dragMode) return;
+    const p = canvasPoint(clientX, clientY);
+    const dx = p.x - dragStart.x, dy = p.y - dragStart.y;
+    if (dragMode === 'frontImage') { frontDragX = blockStart.x + dx; frontDragY = blockStart.y + dy; }
+    else if (dragMode === 'backImage') { backDragX = blockStart.x + dx; backDragY = blockStart.y + dy; }
+    else { layout[dragMode].x = blockStart.x + dx; layout[dragMode].y = blockStart.y + dy; }
+    drawCard(false);
+  }
+
+  function endDrag() { if (dragMode) scheduleAutosave(); dragMode = null; canvas.classList.remove('dragging'); }
+
+  canvas.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+  window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+  window.addEventListener('mouseup', endDrag);
+  canvas.addEventListener('touchstart', e => { const t = e.touches[0]; startDrag(t.clientX, t.clientY); }, { passive: false });
+  window.addEventListener('touchmove', e => { if (dragMode) { e.preventDefault(); const t = e.touches[0]; moveDrag(t.clientX, t.clientY); } }, { passive: false });
+  window.addEventListener('touchend', endDrag);
+  window.addEventListener('touchcancel', endDrag);
+
+  function bindImageInput(inputEl, onLoaded) {
+    inputEl.addEventListener('change', e => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => { onLoaded(img); drawCard(false); };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  bindImageInput(inputFrontImage, img => { frontImg = img; frontDragX = 0; frontDragY = 0; scheduleAutosave(); });
+  bindImageInput(inputBackImage, img => { backImg = img; backDragX = 0; backDragY = 0; scheduleAutosave(); });
+
+  [inputFrontImageEnable, inputBackImageEnable, inputCatalogName, inputBackText,
+   inputFrontZoom, inputBackZoom, inputCardColor, inputFontColor]
+    .forEach(el => el.addEventListener('input', () => { drawCard(false); scheduleAutosave(); }));
+
+  inputFont.addEventListener('change', () => {
+    document.fonts.load('26px ' + fontFamily()).then(() => drawCard(false)).catch(() => drawCard(false));
+    scheduleAutosave();
+  });
+
+  let clearArmed = false;
+  let clearTimer = null;
+  function doClear() {
+    try { localStorage.setItem(BACKUP_KEY, JSON.stringify(getStateSnapshot())); } catch (e) { /* storage unavailable: skip silently */ }
+    inputCatalogName.value = '';
+    inputBackText.value = '';
+    inputFrontImageEnable.checked = true;
+    inputBackImageEnable.checked = true;
+    inputFrontImage.value = ''; frontImg = null; frontDragX = 0; frontDragY = 0; inputFrontZoom.value = 1;
+    inputBackImage.value = ''; backImg = null; backDragX = 0; backDragY = 0; inputBackZoom.value = 1;
+    inputFont.selectedIndex = 0;
+    inputCardColor.value = '#ffffff';
+    inputFontColor.value = '#222222';
+    layout = defaultLayout();
+    drawCard(false);
+    scheduleAutosave();
+    updateRestoreButtonVisibility();
+  }
+  btnClear.addEventListener('click', () => {
+    if (!clearArmed) {
+      clearArmed = true;
+      btnClear.textContent = 'もう一度押すとクリアされます';
+      btnClear.classList.add('armed');
+      clearTimer = setTimeout(() => {
+        clearArmed = false;
+        btnClear.textContent = '入力内容をクリア';
+        btnClear.classList.remove('armed');
+      }, 3000);
+      return;
+    }
+    clearTimeout(clearTimer);
+    clearArmed = false;
+    btnClear.textContent = '入力内容をクリア';
+    btnClear.classList.remove('armed');
+    doClear();
+  });
+
+  btnRestoreBackup.addEventListener('click', () => {
+    try {
+      const saved = localStorage.getItem(BACKUP_KEY);
+      if (!saved) return;
+      applyStateSnapshot(JSON.parse(saved), () => scheduleAutosave());
+    } catch (e) { /* nothing to restore */ }
+  });
+
+  const EXPORT_SCALE = 4;
+  function renderExportCanvas() {
+    const c = document.createElement('canvas');
+    c.width = CARD_W * EXPORT_SCALE; c.height = CARD_H * EXPORT_SCALE;
+    const exCtx = c.getContext('2d');
+    exCtx.scale(EXPORT_SCALE, EXPORT_SCALE);
+    const prev = activeCtx; activeCtx = exCtx; drawCard(true); activeCtx = prev;
+    return c;
+  }
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  btnDownloadPng.addEventListener('click', () => {
+    const c = renderExportCanvas();
+    c.toBlob(blob => { if (blob) downloadBlob(blob, (inputCatalogName.value || '表紙') + '.png'); }, 'image/png');
+  });
+
+  btnExportPdf.addEventListener('click', () => {
+    const coverCanvas = renderExportCanvas();
+
+    const DPI = 300;
+    const MM_TO_PX = DPI / 25.4;
+    const PAGE_W = Math.round(210 * MM_TO_PX), PAGE_H = Math.round(297 * MM_TO_PX);
+    const ITEM_W = Math.round(142 * MM_TO_PX), ITEM_H = Math.round(70 * MM_TO_PX);
+    const MARGIN_TOP = Math.round(10 * MM_TO_PX), GAP = Math.round(6 * MM_TO_PX);
+    const marginX = Math.round((PAGE_W - ITEM_W) / 2);
+    const perPage = Math.max(1, Math.floor((PAGE_H - MARGIN_TOP * 2 + GAP) / (ITEM_H + GAP)));
+
+    let copies = parseInt(inputCopies.value, 10);
+    if (!copies || copies < 1) copies = 1;
+    const pages = Math.ceil(copies / perPage);
+
+    for (let page = 0; page < pages; page++) {
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = PAGE_W; pageCanvas.height = PAGE_H;
+      const pctx = pageCanvas.getContext('2d');
+      pctx.fillStyle = '#fff';
+      pctx.fillRect(0, 0, PAGE_W, PAGE_H);
+
+      const onThisPage = Math.min(perPage, copies - page * perPage);
+      for (let row = 0; row < onThisPage; row++) {
+        const y = MARGIN_TOP + row * (ITEM_H + GAP);
+        pctx.drawImage(coverCanvas, marginX, y, ITEM_W, ITEM_H);
+
+        pctx.strokeStyle = '#000';
+        pctx.lineWidth = Math.max(1, MM_TO_PX * 0.15);
+        const markLen = MM_TO_PX * 4, markGap = MM_TO_PX * 1;
+        const corners = [
+          [marginX, y], [marginX + ITEM_W, y],
+          [marginX, y + ITEM_H], [marginX + ITEM_W, y + ITEM_H]
+        ];
+        corners.forEach(([cx, cy]) => {
+          const sx = cx < marginX + ITEM_W / 2 ? -1 : 1;
+          const sy = cy < y + ITEM_H / 2 ? -1 : 1;
+          pctx.beginPath();
+          pctx.moveTo(cx + sx * markGap, cy);
+          pctx.lineTo(cx + sx * (markGap + markLen), cy);
+          pctx.moveTo(cx, cy + sy * markGap);
+          pctx.lineTo(cx, cy + sy * (markGap + markLen));
+          pctx.stroke();
+        });
+
+        pctx.save();
+        pctx.setLineDash([MM_TO_PX * 1, MM_TO_PX * 1]);
+        pctx.beginPath();
+        pctx.moveTo(marginX + ITEM_W / 2, y);
+        pctx.lineTo(marginX + ITEM_W / 2, y + ITEM_H);
+        pctx.stroke();
+        pctx.restore();
+      }
+
+      pageCanvas.toBlob(blob => {
+        if (blob) downloadBlob(blob, (inputCatalogName.value || '表紙') + '_面付_' + (page + 1) + 'p.png');
+      }, 'image/png');
+    }
+  });
+
+  function imgToDataUrl(img) { return img ? img.src : null; }
+
+  function getStateSnapshot() {
+    return {
+      catalogName: inputCatalogName.value,
+      backText: inputBackText.value,
+      frontImageEnable: inputFrontImageEnable.checked,
+      backImageEnable: inputBackImageEnable.checked,
+      frontImageDataUrl: imgToDataUrl(frontImg),
+      backImageDataUrl: imgToDataUrl(backImg),
+      frontZoom: inputFrontZoom.value,
+      backZoom: inputBackZoom.value,
+      frontDragX, frontDragY, backDragX, backDragY,
+      font: inputFont.value,
+      bgColor: inputCardColor.value,
+      fontColor: inputFontColor.value,
+      layout
+    };
+  }
+
+  function applyStateSnapshot(data, onDone) {
+    inputCatalogName.value = data.catalogName || '';
+    inputBackText.value = data.backText || '';
+    inputFrontImageEnable.checked = data.frontImageEnable !== false;
+    inputBackImageEnable.checked = data.backImageEnable !== false;
+    if (data.frontZoom) inputFrontZoom.value = data.frontZoom;
+    if (data.backZoom) inputBackZoom.value = data.backZoom;
+    frontDragX = data.frontDragX || 0; frontDragY = data.frontDragY || 0;
+    backDragX = data.backDragX || 0; backDragY = data.backDragY || 0;
+    if (data.font) inputFont.value = data.font;
+    if (data.bgColor) inputCardColor.value = data.bgColor;
+    if (data.fontColor) inputFontColor.value = data.fontColor;
+    if (data.layout) layout = data.layout;
+
+    frontImg = null; backImg = null;
+    const loaders = [];
+    if (data.frontImageDataUrl) {
+      loaders.push(new Promise(res => { const img = new Image(); img.onload = () => { frontImg = img; res(); }; img.src = data.frontImageDataUrl; }));
+    }
+    if (data.backImageDataUrl) {
+      loaders.push(new Promise(res => { const img = new Image(); img.onload = () => { backImg = img; res(); }; img.src = data.backImageDataUrl; }));
+    }
+    drawCard(false);
+    Promise.all(loaders).then(() => { drawCard(false); if (onDone) onDone(); });
+  }
+
+  const AUTOSAVE_KEY = 'tewara_hyoushi_autosave_v1';
+  const BACKUP_KEY = 'tewara_hyoushi_backup_v1';
+  const AUTORESTORE_PREF_KEY = 'tewara_hyoushi_autorestore_pref';
+  function getAutoRestorePref() {
+    try { const v = localStorage.getItem(AUTORESTORE_PREF_KEY); return v === null ? true : v === '1'; }
+    catch (e) { return true; }
+  }
+  function setAutoRestorePref(v) {
+    try { localStorage.setItem(AUTORESTORE_PREF_KEY, v ? '1' : '0'); } catch (e) { /* storage unavailable: skip silently */ }
+  }
+  let autosaveTimer = null;
+  function scheduleAutosave() {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => {
+      try { localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(getStateSnapshot())); } catch (e) { /* storage unavailable: skip silently */ }
+    }, 600);
+  }
+  function updateRestoreButtonVisibility() {
+    let has = false;
+    try { has = !!localStorage.getItem(BACKUP_KEY); } catch (e) { has = false; }
+    btnRestoreBackup.style.display = has ? 'block' : 'none';
+  }
+
+  btnExportJson.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(getStateSnapshot(), null, 2)], { type: 'application/json' });
+    downloadBlob(blob, (inputCatalogName.value || '表紙') + '.json');
+  });
+
+  inputJsonLoad.addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        applyStateSnapshot(data, () => { jsonStatus.textContent = '読み込みました。'; scheduleAutosave(); });
+      } catch (err) {
+        jsonStatus.textContent = 'JSONの読み込みに失敗しました：' + err.message;
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  try {
+    inputAutoRestore.checked = getAutoRestorePref();
+    const saved = localStorage.getItem(AUTOSAVE_KEY);
+    if (saved && inputAutoRestore.checked) {
+      applyStateSnapshot(JSON.parse(saved), () => { autosaveStatus.textContent = '（前回の内容を自動復元しました）'; });
+    } else {
+      drawCard(false);
+      if (saved) autosaveStatus.textContent = '（保存内容があります。「保存内容を読み込む」から復元できます）';
+    }
+  } catch (e) {
+    drawCard(false);
+  }
+  inputAutoRestore.addEventListener('change', () => setAutoRestorePref(inputAutoRestore.checked));
+  btnLoadAutosave.addEventListener('click', () => {
+    try {
+      const saved = localStorage.getItem(AUTOSAVE_KEY);
+      if (!saved) { autosaveStatus.textContent = '保存されている内容がありません。'; return; }
+      applyStateSnapshot(JSON.parse(saved), () => { autosaveStatus.textContent = '読み込みました。'; });
+    } catch (e) { autosaveStatus.textContent = '読み込みに失敗しました。'; }
+  });
+  updateRestoreButtonVisibility();
+  document.fonts.ready.then(() => drawCard(false));
+</script>
+</body>
+</html>

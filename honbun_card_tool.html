@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>掌カタログ 本文カード作成ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #0f6e6a;
+    --accent-dark: #0b524f;
+    --danger: #c0392b;
+    --bg: #eef2f4;
+    --panel: #ffffff;
+    --text: #263238;
+    --muted: #7a8a90;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: var(--bg);
+    padding: 20px;
+    margin: 0;
+    color: var(--text);
+  }
+  .app-container { max-width: 820px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  h1 {
+    width: 100%;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: 0.02em;
+    margin: 0 0 4px;
+    color: var(--accent-dark);
+  }
+  .note { width: 100%; font-size: 11px; color: var(--muted); margin: 0 0 8px; }
+  .note a { color: var(--accent); font-weight: 700; text-decoration: underline; }
+
+  #form-area { flex: 1 1 340px; min-width: 280px; }
+  .panel {
+    background: var(--panel);
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(15,110,106,0.10);
+    margin-top: 12px;
+    padding: 14px 16px;
+  }
+  .panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0 0 8px;
+  }
+  #form-area label { display: block; margin-top: 8px; font-size: 13px; color: #4a5a5e; }
+  #form-area input[type="text"], #form-area textarea, #form-area select {
+    width: 100%; box-sizing: border-box; padding: 7px 8px; font-size: 13px; margin-top: 3px;
+    border: 1px solid #d5dee0; border-radius: 6px; background: #fbfdfd; font-family: inherit;
+  }
+  #form-area input[type="text"]:focus, #form-area textarea:focus, #form-area select:focus {
+    outline: none; border-color: var(--accent);
+  }
+  textarea.error { border-color: var(--danger) !important; background: #fff6f5; }
+
+  #charCount { font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px; }
+  #charCount.over { color: var(--danger); font-weight: bold; }
+  #synopsisLines { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.6; border-top: 1px dashed #dfe6e7; padding-top: 6px; }
+  #synopsisLines div.line-over { color: var(--danger); text-decoration: line-through; }
+
+  .checkbox-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .checkbox-row label { margin: 0; font-size: 13px; color: #333; }
+  .color-row { display: flex; gap: 12px; }
+  .color-row > div { flex: 1; }
+  .color-row label { display: block; font-size: 12px; color: #555; margin-bottom: 3px; }
+  input[type="color"] { width: 100%; height: 28px; padding: 0; border: 1px solid #d5dee0; border-radius: 6px; cursor: pointer; }
+
+  .qr-slot { border-top: 1px dashed #dfe6e7; padding-top: 8px; margin-top: 8px; }
+  .qr-slot:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
+
+  .btn {
+    width: 100%; padding: 9px; font-size: 12px; font-weight: 700; border: none;
+    background: var(--accent); color: #fff; border-radius: 7px; cursor: pointer; margin-top: 8px;
+    letter-spacing: 0.02em;
+  }
+  .btn:hover { background: var(--accent-dark); }
+  .btn-outline { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+  .btn-outline:hover { background: #eaf5f4; }
+  .btn-danger { background: #fff; color: var(--danger); border: 1px solid var(--danger); }
+  .btn-danger:hover { background: #fdecea; }
+  .btn-danger.armed { background: var(--danger); color: #fff; }
+
+  .status-text { font-size: 11px; color: var(--muted); margin-top: 6px; min-height: 14px; }
+
+  #preview-area {
+    flex: 0 0 320px;
+    width: 320px;
+    position: sticky;
+    top: 16px;
+  }
+  .preview-panel {
+    background: var(--panel);
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(15,110,106,0.10);
+    padding: 12px;
+  }
+  #preview-label {
+    font-size: 11px; font-weight: 700; color: var(--accent);
+    letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  canvas { border: 1px solid #d5dee0; border-radius: 6px; background: #fff; cursor: grab; touch-action: none; width: 100%; height: auto; aspect-ratio: 1 / 1; display: block; }
+  canvas.dragging { cursor: grabbing; }
+
+  #csvRowSelect { width: 100%; margin-top: 6px; padding: 6px; border: 1px solid #d5dee0; border-radius: 6px; font-size: 13px; }
+
+  footer { width: 100%; box-sizing: border-box; margin-top: 20px; padding-top: 12px; border-top: 1px solid #dfe6e7;
+    text-align: center; font-size: 11px; color: var(--muted); }
+
+  .usage-notice {
+    width: 100%; box-sizing: border-box; margin-top: 16px;
+    background: var(--panel); border-left: 4px solid var(--danger); border-radius: 8px;
+    padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 12px;
+    align-items: center; justify-content: space-between;
+    box-shadow: 0 1px 4px rgba(15,110,106,0.10);
+  }
+  .usage-notice-text { flex: 1 1 260px; }
+  .usage-notice-title { font-weight: 700; margin: 0 0 6px; color: var(--text); font-size: 13px; }
+  .usage-notice-list { margin: 0; padding-left: 18px; font-size: 12px; color: #555; line-height: 1.7; }
+  .usage-notice-link { font-size: 12px; font-weight: 700; color: var(--danger); text-decoration: underline; white-space: nowrap; }
+
+  @media (max-width: 720px) {
+    .app-container { flex-direction: column; }
+    #preview-area { order: -1; position: sticky; top: 0; width: 100%; flex: none; z-index: 10; background: var(--bg); padding-bottom: 6px; }
+    #form-area { width: 100%; flex: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app-container">
+  <h1>掌カタログ 本文カード作成ツール</h1>
+  <p class="note">アップロードした画像はこのページ内でのみ使用され、送信・保存は行われません。1ページ＝7cm四方のカードを1枚ずつ作成します。</p>
+  <p class="note">使い方に迷ったら、HS書架様の <a href="https://note.com/hs_syoka/n/n90b6101dbedb" target="_blank" rel="noopener">「カタログの作り方」のページ ↗</a> もご参考ください。</p>
+
+  <div id="preview-area">
+    <div class="preview-panel">
+      <div id="preview-label">プレビュー（仕上がり7cm四方）</div>
+      <canvas id="cardCanvas" width="400" height="400"></canvas>
+      <button type="button" id="btnDownloadSingle" class="btn" style="margin-top:10px;">カード画像をダウンロード（PNG）</button>
+    </div>
+  </div>
+
+  <div id="form-area">
+
+    <div class="panel">
+      <p class="panel-title">キャッチコピー・タイトル</p>
+      <label>一行キャッチコピー
+        <input type="text" id="inputCatch">
+      </label>
+      <label>タイトル名
+        <input type="text" id="inputTitle">
+      </label>
+      <label>自由記載
+        <textarea id="inputFreeText" rows="2" placeholder="サイズ/ページ数/シリーズ名など"></textarea>
+      </label>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">画像（表紙データ／書影）</p>
+      <label>画像を選ぶ
+        <input type="file" id="inputImage" accept="image/*">
+      </label>
+      <label>拡大率
+        <input type="range" id="inputZoom" min="0.5" max="1.5" step="0.01" value="1">
+      </label>
+      <p class="note" style="margin-top:6px;">画像エリア内をドラッグすると切り抜き位置を調整できます。</p>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">価格</p>
+      <label>通常価格（例：¥1,200）
+        <input type="text" id="inputPriceNormal">
+      </label>
+      <label>イベント価格（空欄なら通常価格のみ大きく表示）
+        <input type="text" id="inputPriceEvent">
+      </label>
+      <p class="note" style="margin-top:6px;">価格とQRコードはプレビュー上でそれぞれ別々にドラッグ移動できます。</p>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">QRコード（最大3個・未入力の枠は表示されません）</p>
+      <div class="qr-slot">
+        <label>QR画像 1<input type="file" id="inputQrImg1" accept="image/*"></label>
+        <label>一言説明 1<input type="text" id="inputQrLabel1"></label>
+      </div>
+      <div class="qr-slot">
+        <label>QR画像 2<input type="file" id="inputQrImg2" accept="image/*"></label>
+        <label>一言説明 2<input type="text" id="inputQrLabel2"></label>
+      </div>
+      <div class="qr-slot">
+        <label>QR画像 3<input type="file" id="inputQrImg3" accept="image/*"></label>
+        <label>一言説明 3<input type="text" id="inputQrLabel3"></label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">紹介文（100文字まで）</p>
+      <textarea id="inputSynopsis" rows="5"></textarea>
+      <div id="charCount">0 / 100 文字</div>
+      <div id="synopsisLines"></div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">その他</p>
+      <div class="checkbox-row">
+        <input type="checkbox" id="inputR18">
+        <label for="inputR18">R18作品（バッジはプレビュー上でドラッグ移動できます）</label>
+      </div>
+      <label>フォント
+        <select id="inputFont">
+          <option value="'Noto Sans JP', sans-serif">ゴシック体</option>
+          <option value="'Noto Serif JP', serif">明朝体</option>
+        </select>
+      </label>
+      <div class="color-row" style="margin-top:10px;">
+        <div><label>背景色</label><input type="color" id="inputCardColor" value="#ffffff"></div>
+        <div><label>文字色</label><input type="color" id="inputFontColor" value="#222222"></div>
+      </div>
+    </div>
+
+    <button type="button" id="btnClear" class="btn btn-danger">入力内容をクリア</button>
+
+    <div class="panel">
+      <p class="panel-title">CSVから一括投入（文字情報のみ・画像は含みません）</p>
+      <p class="note">CSVから一括登録の際は、次のテンプレートを使用してください。</p>
+      <p class="note">価格などカンマを含む値は、Excel等で保存すれば自動的に "1,200" のようにダブルクォートで囲まれるので、そのままご利用いただけます。</p>
+      <p class="note">R18列は、何か記載があればR18として扱われます（空欄ならR18ではない）。</p>
+      <button type="button" id="btnDownloadCsvTemplate" class="btn btn-outline">CSVテンプレートをダウンロード（空欄）</button>
+      <label>CSVファイルを選択
+        <input type="file" id="inputCsvFile" accept=".csv,text/csv">
+      </label>
+      <div id="csvStatus" class="status-text"></div>
+      <select id="csvRowSelect"></select>
+      <button type="button" id="btnApplyCsvRow" class="btn">選択した行を適用</button>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">作業データの保存／読込</p>
+      <button type="button" id="btnExportJson" class="btn btn-outline">JSONで保存（画像込み・後日再開用）</button>
+      <label>JSONを読み込む
+        <input type="file" id="inputJsonLoad" accept="application/json">
+      </label>
+      <div id="jsonStatus" class="status-text"></div>
+    </div>
+
+  </div>
+
+  <footer>掌カタログ 本文カード作成ツール（試作版）</footer>
+
+  <div class="usage-notice">
+    <div class="usage-notice-text">
+      <p class="usage-notice-title">ご利用にあたって</p>
+      <ul class="usage-notice-list">
+        <li>本ツールのカードテンプレートは、HS書架様の原案を参考にしています。</li>
+        <li>本ツールの不具合等について、HS書架様は関与・保証いたしません。</li>
+        <li>免責事項の詳細は「利用規約・免責事項を確認する」のリンクをご確認ください。</li>
+      </ul>
+    </div>
+    <a class="usage-notice-link" href="https://github.com/kanashiki1979/terms" target="_blank" rel="noopener">利用規約・免責事項を確認する ↗</a>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById('cardCanvas');
+  const ctx = canvas.getContext('2d');
+  let activeCtx = ctx;
+  const CARD = 400;
+
+  const inputCatch = document.getElementById('inputCatch');
+  const inputTitle = document.getElementById('inputTitle');
+  const inputFreeText = document.getElementById('inputFreeText');
+  const inputImage = document.getElementById('inputImage');
+  const inputZoom = document.getElementById('inputZoom');
+  const inputPriceNormal = document.getElementById('inputPriceNormal');
+  const inputPriceEvent = document.getElementById('inputPriceEvent');
+  const qrImgInputs = [document.getElementById('inputQrImg1'), document.getElementById('inputQrImg2'), document.getElementById('inputQrImg3')];
+  const qrLabelInputs = [document.getElementById('inputQrLabel1'), document.getElementById('inputQrLabel2'), document.getElementById('inputQrLabel3')];
+  const inputSynopsis = document.getElementById('inputSynopsis');
+  const charCountEl = document.getElementById('charCount');
+  const synopsisLinesEl = document.getElementById('synopsisLines');
+  const inputR18 = document.getElementById('inputR18');
+  const inputFont = document.getElementById('inputFont');
+  const inputCardColor = document.getElementById('inputCardColor');
+  const inputFontColor = document.getElementById('inputFontColor');
+  const btnClear = document.getElementById('btnClear');
+  const btnDownloadSingle = document.getElementById('btnDownloadSingle');
+  const btnDownloadCsvTemplate = document.getElementById('btnDownloadCsvTemplate');
+  const inputCsvFile = document.getElementById('inputCsvFile');
+  const csvStatus = document.getElementById('csvStatus');
+  const csvRowSelect = document.getElementById('csvRowSelect');
+  const btnApplyCsvRow = document.getElementById('btnApplyCsvRow');
+  const btnExportJson = document.getElementById('btnExportJson');
+  const inputJsonLoad = document.getElementById('inputJsonLoad');
+  const jsonStatus = document.getElementById('jsonStatus');
+
+  let uploadedImage = null;
+  let qrImages = [null, null, null];
+  let imgDragX = 0, imgDragY = 0;
+  let csvRows = [];
+
+  const defaultLayout = () => ({
+    image:     { x: 16,  y: 16,  w: 170, h: 270 },
+    header:    { x: 198, y: 16,  w: 186, h: 110 },
+    priceText: { x: 198, y: 140, w: 186, h: 74  },
+    qr:        { x: 198, y: 220, w: 186, h: 76  },
+    synopsis:  { x: 16,  y: 296, w: 368, h: 88  },
+    r18:       { x: 334, y: 16,  w: 50,  h: 30  }
+  });
+  let layout = defaultLayout();
+
+  function fontFamily() { return inputFont.value; }
+  function hasHeader() { return inputCatch.value.trim() !== '' || inputTitle.value.trim() !== '' || inputFreeText.value.trim() !== ''; }
+  function qrCount() { return qrLabelInputs.filter((el, i) => qrImages[i] || el.value.trim() !== '').length; }
+  function hasPriceText() { return inputPriceNormal.value.trim() !== '' || inputPriceEvent.value.trim() !== ''; }
+  function hasQr() { return qrCount() > 0; }
+  function hasSynopsis() { return inputSynopsis.value.trim() !== ''; }
+  function activeQrIndexes() {
+    const idx = [];
+    for (let i = 0; i < 3; i++) { if (qrImages[i] || qrLabelInputs[i].value.trim() !== '') idx.push(i); }
+    return idx;
+  }
+
+  function wrapLines(text, maxWidth) {
+    const lines = [];
+    text.split('\n').forEach(p => {
+      let line = '';
+      for (let i = 0; i < p.length; i++) {
+        const test = line + p[i];
+        if (activeCtx.measureText(test).width > maxWidth && line !== '') { lines.push(line); line = p[i]; }
+        else line = test;
+      }
+      lines.push(line);
+    });
+    return lines;
+  }
+
+  function validateSynopsis() {
+    const text = inputSynopsis.value;
+    const overChars = text.length > 100;
+    activeCtx.font = '13px ' + fontFamily();
+    const maxW = layout.synopsis.w - 16;
+    const lines = wrapLines(text, maxW);
+    const maxLines = Math.max(1, Math.floor((layout.synopsis.h - 8) / 18));
+    const overLines = lines.length > maxLines;
+    return { ok: !overChars && !overLines, lines, overChars, overLines, maxLines };
+  }
+
+  function updateCharCount() {
+    const v = validateSynopsis();
+    charCountEl.textContent = inputSynopsis.value.length + ' / 100 文字　(' + v.lines.length + ' / ' + v.maxLines + ' 行)';
+    charCountEl.classList.toggle('over', !v.ok);
+    inputSynopsis.classList.toggle('error', !v.ok);
+
+    synopsisLinesEl.innerHTML = '';
+    if (v.lines.length && v.lines.some(l => l !== '')) {
+      v.lines.forEach((line, i) => {
+        const div = document.createElement('div');
+        const over = i >= v.maxLines;
+        div.textContent = (i + 1) + '行目： ' + (line === '' ? '(空行)' : line) + (over ? '　※このままだとカードに入りきりません' : '');
+        if (over) div.classList.add('line-over');
+        synopsisLinesEl.appendChild(div);
+      });
+    }
+  }
+
+  function getCoverScale(img, w, h) { return Math.max(w / img.width, h / img.height); }
+
+  function drawImageCover(img, areaX, areaY, areaW, areaH, zoom, offX, offY) {
+    const scale = getCoverScale(img, areaW, areaH) * zoom;
+    const dw = img.width * scale, dh = img.height * scale;
+    let dx = areaX + (areaW - dw) / 2 + offX;
+    let dy = areaY + (areaH - dh) / 2 + offY;
+    if (dw > areaW) dx = Math.max(areaX + areaW - dw, Math.min(areaX, dx));
+    if (dh > areaH) dy = Math.max(areaY + areaH - dh, Math.min(areaY, dy));
+    activeCtx.save();
+    activeCtx.beginPath();
+    activeCtx.rect(areaX, areaY, areaW, areaH);
+    activeCtx.clip();
+    activeCtx.drawImage(img, dx, dy, dw, dh);
+    activeCtx.restore();
+  }
+
+  function drawR18(x, y, w, h) {
+    activeCtx.save();
+    activeCtx.fillStyle = '#fff';
+    activeCtx.fillRect(x, y, w, h);
+    activeCtx.strokeStyle = '#c0392b';
+    activeCtx.lineWidth = 2;
+    activeCtx.strokeRect(x, y, w, h);
+    activeCtx.fillStyle = '#c0392b';
+    activeCtx.font = 'bold 16px sans-serif';
+    activeCtx.textAlign = 'center';
+    activeCtx.textBaseline = 'middle';
+    activeCtx.fillText('R18', x + w / 2, y + h / 2);
+    activeCtx.restore();
+    activeCtx.textAlign = 'left';
+    activeCtx.textBaseline = 'alphabetic';
+  }
+
+  function drawCard() {
+    const bg = inputCardColor.value;
+    const fc = inputFontColor.value;
+
+    activeCtx.clearRect(0, 0, CARD, CARD);
+    activeCtx.fillStyle = bg;
+    activeCtx.fillRect(0, 0, CARD, CARD);
+
+    const iz = layout.image;
+    if (uploadedImage) {
+      drawImageCover(uploadedImage, iz.x, iz.y, iz.w, iz.h, parseFloat(inputZoom.value), imgDragX, imgDragY);
+      activeCtx.strokeStyle = '#ccc';
+      activeCtx.strokeRect(iz.x, iz.y, iz.w, iz.h);
+    } else {
+      activeCtx.fillStyle = '#ddd';
+      activeCtx.fillRect(iz.x, iz.y, iz.w, iz.h);
+      activeCtx.fillStyle = '#888';
+      activeCtx.font = '13px ' + fontFamily();
+      activeCtx.textAlign = 'center';
+      activeCtx.fillText('表紙データ／書影', iz.x + iz.w / 2, iz.y + iz.h / 2);
+      activeCtx.textAlign = 'left';
+    }
+
+    if (hasHeader()) {
+      const hz = layout.header;
+      activeCtx.fillStyle = fc;
+      let cy = hz.y + 16;
+      if (inputCatch.value.trim() !== '') {
+        activeCtx.font = '12px ' + fontFamily();
+        activeCtx.fillText(inputCatch.value, hz.x, cy, hz.w);
+        cy += 22;
+      }
+      if (inputTitle.value.trim() !== '') {
+        activeCtx.font = 'bold 19px ' + fontFamily();
+        const lines = wrapLines(inputTitle.value, hz.w);
+        const shown = lines.slice(0, 3);
+        shown.forEach((line, i) => activeCtx.fillText(line, hz.x, cy + i * 24));
+        cy += shown.length * 24 + 4;
+      }
+      if (inputFreeText.value.trim() !== '') {
+        activeCtx.font = '11px ' + fontFamily();
+        activeCtx.fillStyle = fc;
+        const lines = wrapLines(inputFreeText.value, hz.w);
+        lines.slice(0, 2).forEach((line, i) => activeCtx.fillText(line, hz.x, cy + i * 15));
+      }
+    }
+
+    if (hasPriceText()) {
+      const pz = layout.priceText;
+      const py = pz.y + 20;
+      const normal = inputPriceNormal.value.trim();
+      const event = inputPriceEvent.value.trim();
+      activeCtx.textAlign = 'left';
+      if (normal !== '' && event !== '') {
+        activeCtx.font = '13px ' + fontFamily();
+        const w1 = activeCtx.measureText(normal).width;
+        activeCtx.font = '14px ' + fontFamily();
+        const arrowW = activeCtx.measureText('▶').width;
+        activeCtx.font = 'bold 20px ' + fontFamily();
+        const eventW = activeCtx.measureText(event).width;
+        const totalW = w1 + 6 + arrowW + 6 + eventW;
+        const normalX = pz.x + (pz.w - totalW) / 2;
+
+        activeCtx.font = '13px ' + fontFamily();
+        activeCtx.fillStyle = fc;
+        activeCtx.fillText(normal, normalX, py);
+        activeCtx.beginPath();
+        activeCtx.moveTo(normalX, py - 4);
+        activeCtx.lineTo(normalX + w1, py - 4);
+        activeCtx.strokeStyle = fc;
+        activeCtx.stroke();
+        activeCtx.font = '14px ' + fontFamily();
+        activeCtx.fillStyle = fc;
+        activeCtx.fillText('▶', normalX + w1 + 6, py);
+        const eventX = normalX + w1 + 6 + arrowW + 6;
+        activeCtx.font = 'bold 20px ' + fontFamily();
+        activeCtx.fillStyle = '#c0392b';
+        activeCtx.fillText(event, eventX, py + 2);
+
+        activeCtx.font = '10px ' + fontFamily();
+        activeCtx.fillStyle = fc;
+        activeCtx.fillText('通常価格', normalX, py + 16);
+        activeCtx.fillStyle = '#c0392b';
+        activeCtx.fillText('イベント価格', eventX, py + 16);
+      } else if (normal !== '' || event !== '') {
+        const label = normal !== '' ? '通常価格' : 'イベント価格';
+        activeCtx.font = 'bold 22px ' + fontFamily();
+        const textW = activeCtx.measureText(normal || event).width;
+        const centeredX = pz.x + (pz.w - textW) / 2;
+        activeCtx.fillStyle = fc;
+        activeCtx.fillText(normal || event, centeredX, py + 2);
+        activeCtx.font = '10px ' + fontFamily();
+        const labelW = activeCtx.measureText(label).width;
+        activeCtx.fillStyle = fc;
+        activeCtx.fillText(label, pz.x + (pz.w - labelW) / 2, py + 20);
+      }
+    }
+
+    if (hasQr()) {
+      const qz = layout.qr;
+      const idxs = activeQrIndexes();
+      const qrSize = 44, gap = 14;
+      const totalW = idxs.length * qrSize + (idxs.length - 1) * gap;
+      let qx = qz.x + (qz.w - totalW) / 2;
+      const qy = qz.y;
+      idxs.forEach(i => {
+        if (qrImages[i]) activeCtx.drawImage(qrImages[i], qx, qy, qrSize, qrSize);
+        else { activeCtx.fillStyle = '#eee'; activeCtx.fillRect(qx, qy, qrSize, qrSize); }
+        activeCtx.strokeStyle = '#ccc';
+        activeCtx.strokeRect(qx, qy, qrSize, qrSize);
+        const label = qrLabelInputs[i].value.trim();
+        if (label !== '') {
+          activeCtx.fillStyle = fc;
+          activeCtx.font = '10px ' + fontFamily();
+          activeCtx.textAlign = 'center';
+          activeCtx.fillText(label, qx + qrSize / 2, qy + qrSize + 14, qrSize + 20);
+          activeCtx.textAlign = 'left';
+        }
+        qx += qrSize + gap;
+      });
+    }
+
+    if (hasSynopsis()) {
+      const sz = layout.synopsis;
+      const v = validateSynopsis();
+      activeCtx.font = '13px ' + fontFamily();
+      activeCtx.fillStyle = v.ok ? fc : '#c0392b';
+      const lines = v.ok ? v.lines : v.lines.slice(0, v.maxLines);
+      lines.forEach((line, i) => activeCtx.fillText(line, sz.x, sz.y + 16 + i * 18));
+      if (!v.ok) {
+        activeCtx.fillStyle = '#c0392b';
+        activeCtx.font = 'bold 11px ' + fontFamily();
+        activeCtx.fillText('⚠ 100文字/表示可能行数を超えています', sz.x, sz.y + sz.h - 4);
+      }
+    }
+
+    if (inputR18.checked) {
+      const rz = layout.r18;
+      drawR18(rz.x, rz.y, rz.w, rz.h);
+    }
+  }
+
+  function pointInRect(px, py, r) { return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h; }
+
+  let dragMode = null;
+  let dragStart = { x: 0, y: 0 };
+  let blockStart = { x: 0, y: 0 };
+
+  function canvasPoint(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+  }
+
+  function hitTest(px, py) {
+    if (inputR18.checked && pointInRect(px, py, layout.r18)) return 'r18';
+    if (hasHeader() && pointInRect(px, py, layout.header)) return 'header';
+    if (hasQr() && pointInRect(px, py, layout.qr)) return 'qr';
+    if (hasPriceText() && pointInRect(px, py, layout.priceText)) return 'priceText';
+    if (hasSynopsis() && pointInRect(px, py, layout.synopsis)) return 'synopsis';
+    if (pointInRect(px, py, layout.image)) return 'image';
+    return null;
+  }
+
+  function startDrag(clientX, clientY) {
+    const p = canvasPoint(clientX, clientY);
+    const hit = hitTest(p.x, p.y);
+    if (!hit) return;
+    dragMode = hit;
+    dragStart = p;
+    blockStart = (hit === 'image') ? { x: imgDragX, y: imgDragY } : { x: layout[hit].x, y: layout[hit].y };
+    canvas.classList.add('dragging');
+  }
+
+  function moveDrag(clientX, clientY) {
+    if (!dragMode) return;
+    const p = canvasPoint(clientX, clientY);
+    const dx = p.x - dragStart.x, dy = p.y - dragStart.y;
+    if (dragMode === 'image') { imgDragX = blockStart.x + dx; imgDragY = blockStart.y + dy; }
+    else { layout[dragMode].x = blockStart.x + dx; layout[dragMode].y = blockStart.y + dy; }
+    drawCard();
+  }
+
+  function endDrag() { dragMode = null; canvas.classList.remove('dragging'); }
+
+  canvas.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+  window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+  window.addEventListener('mouseup', endDrag);
+  canvas.addEventListener('touchstart', e => { const t = e.touches[0]; startDrag(t.clientX, t.clientY); }, { passive: false });
+  window.addEventListener('touchmove', e => { if (dragMode) { e.preventDefault(); const t = e.touches[0]; moveDrag(t.clientX, t.clientY); } }, { passive: false });
+  window.addEventListener('touchend', endDrag);
+  window.addEventListener('touchcancel', endDrag);
+
+  inputImage.addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => { uploadedImage = img; imgDragX = 0; imgDragY = 0; drawCard(); };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  qrImgInputs.forEach((inp, i) => {
+    inp.addEventListener('change', e => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => { qrImages[i] = img; drawCard(); };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+
+  [inputCatch, inputTitle, inputFreeText, inputPriceNormal, inputPriceEvent, ...qrLabelInputs, inputR18, inputZoom, inputCardColor, inputFontColor]
+    .forEach(el => el.addEventListener('input', drawCard));
+
+  inputFont.addEventListener('change', () => {
+    document.fonts.load('20px ' + fontFamily()).then(drawCard).catch(drawCard);
+  });
+
+  inputSynopsis.addEventListener('input', () => { updateCharCount(); drawCard(); });
+
+  let clearArmed = false;
+  let clearTimer = null;
+  function doClear() {
+    [inputCatch, inputTitle, inputFreeText, inputPriceNormal, inputPriceEvent, inputSynopsis].forEach(el => el.value = '');
+    qrLabelInputs.forEach(el => el.value = '');
+    qrImgInputs.forEach(el => el.value = '');
+    qrImages = [null, null, null];
+    inputR18.checked = false;
+    inputImage.value = ''; uploadedImage = null; imgDragX = 0; imgDragY = 0;
+    inputZoom.value = 1;
+    inputFont.selectedIndex = 0;
+    inputCardColor.value = '#ffffff';
+    inputFontColor.value = '#222222';
+    layout = defaultLayout();
+    updateCharCount();
+    drawCard();
+  }
+  btnClear.addEventListener('click', () => {
+    if (!clearArmed) {
+      clearArmed = true;
+      btnClear.textContent = 'もう一度押すとクリアされます';
+      btnClear.classList.add('armed');
+      clearTimer = setTimeout(() => {
+        clearArmed = false;
+        btnClear.textContent = '入力内容をクリア';
+        btnClear.classList.remove('armed');
+      }, 3000);
+      return;
+    }
+    clearTimeout(clearTimer);
+    clearArmed = false;
+    btnClear.textContent = '入力内容をクリア';
+    btnClear.classList.remove('armed');
+    doClear();
+  });
+
+  const EXPORT_SCALE = 4;
+  function renderExportCanvas() {
+    const c = document.createElement('canvas');
+    c.width = CARD * EXPORT_SCALE; c.height = CARD * EXPORT_SCALE;
+    const exCtx = c.getContext('2d');
+    exCtx.scale(EXPORT_SCALE, EXPORT_SCALE);
+    const prev = activeCtx; activeCtx = exCtx; drawCard(); activeCtx = prev;
+    return c;
+  }
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  function downloadCanvasAsPng(c, filename) {
+    c.toBlob(blob => { if (blob) downloadBlob(blob, filename); }, 'image/png');
+  }
+  btnDownloadSingle.addEventListener('click', () => {
+    const c = renderExportCanvas();
+    downloadCanvasAsPng(c, (inputTitle.value || '本文カード') + '.png');
+  });
+
+  const CSV_HEADER_MAP = {
+    'キャッチコピー': 'catch', 'タイトル': 'title', '自由記載': 'freeText',
+    '通常価格': 'priceNormal', 'イベント価格': 'priceEvent',
+    'QR説明1': 'qrLabel1', 'QR説明2': 'qrLabel2', 'QR説明3': 'qrLabel3',
+    '紹介文': 'synopsis', 'R18': 'r18'
+  };
+  const CSV_TEMPLATE = Object.keys(CSV_HEADER_MAP).join(',') + '\n';
+
+  btnDownloadCsvTemplate.addEventListener('click', () => {
+    const blob = new Blob(['\uFEFF' + CSV_TEMPLATE], { type: 'text/csv;charset=utf-8;' });
+    downloadBlob(blob, '本文カード_CSVテンプレート.csv');
+  });
+
+  function parseCsvLine(line) {
+    const result = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (line[i + 1] === '"') { cur += '"'; i++; }
+          else { inQuotes = false; }
+        } else {
+          cur += c;
+        }
+      } else {
+        if (c === '"') { inQuotes = true; }
+        else if (c === ',') { result.push(cur); cur = ''; }
+        else { cur += c; }
+      }
+    }
+    result.push(cur);
+    return result;
+  }
+
+  function parseCsv(rawText) {
+    const text = rawText.replace(/^\uFEFF/, '');
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) return [];
+    const headers = parseCsvLine(lines[0]).map(h => {
+      const key = h.trim();
+      return CSV_HEADER_MAP[key] || key;
+    });
+    return lines.slice(1).filter(l => l.trim() !== '').map(line => {
+      const cells = parseCsvLine(line);
+      const row = {};
+      headers.forEach((h, i) => row[h] = (cells[i] || '').trim());
+      return row;
+    });
+  }
+
+  inputCsvFile.addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      csvRows = parseCsv(ev.target.result);
+      csvRowSelect.innerHTML = '';
+      csvRows.forEach((row, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = (i + 1) + ': ' + (row.title || '(無題)');
+        csvRowSelect.appendChild(opt);
+      });
+      csvStatus.textContent = csvRows.length + '行を読み込みました。行を選んで「選択した行を適用」を押してください。';
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
+
+  btnApplyCsvRow.addEventListener('click', () => {
+    const i = parseInt(csvRowSelect.value, 10);
+    const row = csvRows[i];
+    if (!row) { csvStatus.textContent = '先にCSVファイルを読み込んでください。'; return; }
+    inputCatch.value = row.catch || '';
+    inputTitle.value = row.title || '';
+    inputFreeText.value = row.freeText || '';
+    inputPriceNormal.value = row.priceNormal || '';
+    inputPriceEvent.value = row.priceEvent || '';
+    qrLabelInputs[0].value = row.qrLabel1 || '';
+    qrLabelInputs[1].value = row.qrLabel2 || '';
+    qrLabelInputs[2].value = row.qrLabel3 || '';
+    inputSynopsis.value = row.synopsis || '';
+    inputR18.checked = (row.r18 || '').trim() !== '';
+    updateCharCount();
+    drawCard();
+    csvStatus.textContent = (i + 1) + '行目を適用しました。';
+  });
+
+  function imgToDataUrl(img) { return img ? img.src : null; }
+
+  btnExportJson.addEventListener('click', () => {
+    const data = {
+      catch: inputCatch.value, title: inputTitle.value, freeText: inputFreeText.value,
+      priceNormal: inputPriceNormal.value, priceEvent: inputPriceEvent.value,
+      qrLabels: qrLabelInputs.map(el => el.value),
+      qrImages: qrImages.map(imgToDataUrl),
+      synopsis: inputSynopsis.value,
+      r18: inputR18.checked,
+      font: inputFont.value,
+      bgColor: inputCardColor.value,
+      fontColor: inputFontColor.value,
+      imageDataUrl: imgToDataUrl(uploadedImage),
+      imageZoom: inputZoom.value,
+      imgDragX, imgDragY,
+      layout
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, (inputTitle.value || '本文カード') + '.json');
+  });
+
+  inputJsonLoad.addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        inputCatch.value = data.catch || '';
+        inputTitle.value = data.title || '';
+        inputFreeText.value = data.freeText || '';
+        inputPriceNormal.value = data.priceNormal || '';
+        inputPriceEvent.value = data.priceEvent || '';
+        (data.qrLabels || []).forEach((v, i) => { if (qrLabelInputs[i]) qrLabelInputs[i].value = v; });
+        inputSynopsis.value = data.synopsis || '';
+        inputR18.checked = !!data.r18;
+        if (data.font) inputFont.value = data.font;
+        if (data.bgColor) inputCardColor.value = data.bgColor;
+        if (data.fontColor) inputFontColor.value = data.fontColor;
+        if (data.imageZoom) inputZoom.value = data.imageZoom;
+        imgDragX = data.imgDragX || 0; imgDragY = data.imgDragY || 0;
+        if (data.layout) layout = data.layout;
+
+        const loaders = [];
+        if (data.imageDataUrl) {
+          loaders.push(new Promise(res => {
+            const img = new Image();
+            img.onload = () => { uploadedImage = img; res(); };
+            img.src = data.imageDataUrl;
+          }));
+        }
+        (data.qrImages || []).forEach((src, i) => {
+          if (src) {
+            loaders.push(new Promise(res => {
+              const img = new Image();
+              img.onload = () => { qrImages[i] = img; res(); };
+              img.src = src;
+            }));
+          }
+        });
+        updateCharCount();
+        drawCard();
+        jsonStatus.textContent = '読み込みました。';
+        Promise.all(loaders).then(() => drawCard());
+      } catch (err) {
+        jsonStatus.textContent = 'JSONの読み込みに失敗しました：' + err.message;
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  updateCharCount();
+  document.fonts.ready.then(drawCard);
+  drawCard();
+</script>
+</body>
+</html>
