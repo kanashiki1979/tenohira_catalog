@@ -129,8 +129,8 @@
     <p class="panel-title">面付・印刷の流れ</p>
     <p class="note">①「表面（谷折り面）」を出力してA4に印刷 → ②同じ用紙を裏返して再セットし「裏面（山折り面）」を出力して印刷（両面印刷機能を使う場合は<strong>短辺綴じ</strong>設定でご利用ください）→ ③各行を横に裁断 → ④中央の線で折って重ね、中綴じしてください。</p>
     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-      <button type="button" id="btnExportFront" class="btn" disabled>面付画像を出力（表面・谷折り）</button>
-      <button type="button" id="btnExportBack" class="btn btn-outline" disabled>面付画像を出力（裏面・山折り）</button>
+      <button type="button" id="btnExportFront" class="btn" disabled>面付画像を出力（表面・山折り）</button>
+      <button type="button" id="btnExportBack" class="btn btn-outline" disabled>面付画像を出力（裏面・谷折り）</button>
     </div>
     <div class="checkbox-row">
       <input type="checkbox" id="inputShowPageNum" checked>
@@ -317,6 +317,19 @@
     ctx.restore();
   }
 
+  function applyFoldLineStyle(ctx, style) {
+    // front = 表面 = 山折り = 実線／back = 裏面 = 谷折り = 点線
+    if (style === 'front') {
+      ctx.lineWidth = Math.max(1, mm(0.3));
+      ctx.setLineDash([]);
+      ctx.lineCap = 'butt';
+    } else {
+      ctx.lineWidth = Math.max(1, mm(0.55));
+      ctx.setLineDash([mm(0.01), mm(1.6)]);
+      ctx.lineCap = 'round';
+    }
+  }
+
   function drawFoldLine(ctx, x, y, h, style) {
     ctx.save();
     // clear a thin strip first: card designs may have their own edge border right at
@@ -326,13 +339,16 @@
     ctx.fillRect(x - maskHalf, y, maskHalf * 2, h);
 
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = Math.max(1, mm(0.25));
-    if (style === 'front') {
-      ctx.setLineDash([mm(3), mm(1), mm(0.6), mm(1)]); // 一点鎖線＝谷折り
-    } else {
-      ctx.setLineDash([mm(2.2), mm(1.4)]); // 破線＝山折り（線1本、リズムの違いで区別）
-    }
+    applyFoldLineStyle(ctx, style);
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + h); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawStyleSample(ctx, style, cx, cy, halfLen) {
+    ctx.save();
+    ctx.strokeStyle = '#000';
+    applyFoldLineStyle(ctx, style);
+    ctx.beginPath(); ctx.moveTo(cx - halfLen, cy); ctx.lineTo(cx + halfLen, cy); ctx.stroke();
     ctx.restore();
   }
 
@@ -376,11 +392,14 @@
 
       ctx.fillStyle = '#000';
       ctx.font = Math.round(mm(3.2)) + 'px sans-serif';
-      ctx.textAlign = 'left';
+      ctx.textAlign = 'center';
       const label = side === 'front'
-        ? '表面（谷折り）　中央の一点鎖線＝谷折り　　' + (pageIdx + 1) + ' / ' + totalPages + '枚目'
-        : '裏面（山折り）　中央の二重線＝山折り　　' + (pageIdx + 1) + ' / ' + totalPages + '枚目';
-      ctx.fillText(label, MARGIN_X, mm(6));
+        ? '表面（山折り）　中央の直線＝山折り　' + (pageIdx + 1) + ' / ' + totalPages + '枚目'
+        : '裏面（谷折り）　中央の点線＝谷折り　' + (pageIdx + 1) + ' / ' + totalPages + '枚目';
+      const labelY = mm(6);
+      ctx.fillText(label, PAGE_W / 2, labelY);
+      drawStyleSample(ctx, side, PAGE_W / 2, labelY + mm(3), mm(15));
+      ctx.textAlign = 'left';
 
       canvases.push(canvas);
     }
@@ -421,7 +440,7 @@
       group.className = 'side-preview-group';
       const title = document.createElement('p');
       title.className = 'side-preview-title';
-      title.textContent = side === 'front' ? '表面（谷折り）プレビュー' : '裏面（山折り）プレビュー';
+      title.textContent = side === 'front' ? '表面（山折り）プレビュー' : '裏面（谷折り）プレビュー';
       group.appendChild(title);
 
       const list = document.createElement('div');
