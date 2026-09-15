@@ -62,12 +62,12 @@
   #form-area input[type="text"]:focus, #form-area textarea:focus, #form-area select:focus {
     outline: none; border-color: var(--accent);
   }
-  textarea.error { border-color: var(--danger) !important; background: #fff6f5; }
+  textarea.error, #form-area input[type="text"].error { border-color: var(--danger) !important; background: #fff6f5; }
 
-  #charCount { font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px; }
-  #charCount.over { color: var(--danger); font-weight: bold; }
-  #synopsisLines { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.6; border-top: 1px dashed #dfe6e7; padding-top: 6px; }
-  #synopsisLines div.line-over { color: var(--danger); text-decoration: line-through; }
+  #charCount, .field-linecount { font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px; }
+  #charCount.over, .field-linecount.over { color: var(--danger); font-weight: bold; }
+  #synopsisLines, .field-linebreakdown { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.6; border-top: 1px dashed #dfe6e7; padding-top: 6px; }
+  #synopsisLines div.line-over, .field-linebreakdown div.line-over { color: var(--danger); text-decoration: line-through; }
 
   .checkbox-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
   .checkbox-row label { margin: 0; font-size: 13px; color: #333; }
@@ -129,10 +129,28 @@
   .usage-notice-list { margin: 0; padding-left: 18px; font-size: 12px; color: #555; line-height: 1.7; }
   .usage-notice-link { font-size: 12px; font-weight: 700; color: var(--danger); text-decoration: underline; white-space: nowrap; }
 
+  #btnZoomPreview { display: none; }
+
+  #previewZoomOverlay {
+    display: none;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+    align-items: center; justify-content: center; z-index: 1000; padding: 24px;
+  }
+  #previewZoomOverlay.open { display: flex; }
+  #previewZoomOverlay img { width: min(90vw, 90vh); height: auto; border-radius: 8px; box-shadow: 0 4px 24px rgba(0,0,0,0.5); display: block; }
+  #btnCloseZoom {
+    position: absolute; top: 16px; right: 16px;
+    width: 36px; height: 36px; border-radius: 50%; border: none;
+    background: #fff; color: var(--text); font-size: 20px; line-height: 1; cursor: pointer;
+  }
+
   @media (max-width: 720px) {
     .app-container { flex-direction: column; }
     #preview-area { order: -1; position: sticky; top: 0; width: 100%; flex: none; z-index: 10; background: var(--bg); padding-bottom: 6px; }
     #form-area { width: 100%; flex: none; }
+    .preview-panel { display: flex; flex-direction: column; align-items: center; }
+    #preview-area canvas { width: min(100%, 28vh); min-width: 160px; margin: 0 auto; }
+    #btnZoomPreview { display: block; }
   }
 </style>
 </head>
@@ -146,8 +164,14 @@
     <div class="preview-panel">
       <div id="preview-label">プレビュー（仕上がり7cm四方）</div>
       <canvas id="cardCanvas" width="400" height="400"></canvas>
+      <button type="button" id="btnZoomPreview" class="btn btn-outline">拡大して確認</button>
       <button type="button" id="btnDownloadSingle" class="btn" style="margin-top:10px;">カード画像をダウンロード（PNG）</button>
     </div>
+  </div>
+
+  <div id="previewZoomOverlay">
+    <button type="button" id="btnCloseZoom" aria-label="閉じる">×</button>
+    <img id="previewZoomImg" alt="プレビュー拡大">
   </div>
 
   <div id="form-area">
@@ -160,9 +184,13 @@
       <label>タイトル名
         <input type="text" id="inputTitle">
       </label>
+      <div id="titleLineCount" class="field-linecount"></div>
+      <div id="titleLines" class="field-linebreakdown"></div>
       <label>自由記載
         <textarea id="inputFreeText" rows="2" placeholder="サイズ/ページ数/シリーズ名など"></textarea>
       </label>
+      <div id="freeTextLineCount" class="field-linecount"></div>
+      <div id="freeTextLines" class="field-linebreakdown"></div>
     </div>
 
     <div class="panel">
@@ -248,7 +276,7 @@
       <p class="panel-title">作業データの保存／読込</p>
       <button type="button" id="btnExportJson" class="btn btn-outline">JSONで保存（画像込み・後日再開用）</button>
       <label>JSONを読み込む
-        <input type="file" id="inputJsonLoad" accept="application/json">
+        <input type="file" id="inputJsonLoad" accept=".json,application/json">
       </label>
       <div id="jsonStatus" class="status-text"></div>
     </div>
@@ -302,6 +330,14 @@
   const btnExportJson = document.getElementById('btnExportJson');
   const inputJsonLoad = document.getElementById('inputJsonLoad');
   const jsonStatus = document.getElementById('jsonStatus');
+  const titleLineCountEl = document.getElementById('titleLineCount');
+  const titleLinesEl = document.getElementById('titleLines');
+  const freeTextLineCountEl = document.getElementById('freeTextLineCount');
+  const freeTextLinesEl = document.getElementById('freeTextLines');
+  const btnZoomPreview = document.getElementById('btnZoomPreview');
+  const previewZoomOverlay = document.getElementById('previewZoomOverlay');
+  const previewZoomImg = document.getElementById('previewZoomImg');
+  const btnCloseZoom = document.getElementById('btnCloseZoom');
 
   let uploadedImage = null;
   let qrImages = [null, null, null];
@@ -371,6 +407,47 @@
         synopsisLinesEl.appendChild(div);
       });
     }
+  }
+
+  function validateTitleField() {
+    activeCtx.font = 'bold 19px ' + fontFamily();
+    const lines = wrapLines(inputTitle.value, layout.header.w);
+    const maxLines = 3;
+    return { lines, maxLines, overLines: lines.length > maxLines };
+  }
+
+  function validateFreeTextField() {
+    activeCtx.font = '11px ' + fontFamily();
+    const lines = wrapLines(inputFreeText.value, layout.header.w);
+    const maxLines = 2;
+    return { lines, maxLines, overLines: lines.length > maxLines };
+  }
+
+  function updateFieldStatus(inputEl, countEl, linesEl, validate) {
+    const v = validate();
+    countEl.textContent = v.lines.length + ' / ' + v.maxLines + ' 行';
+    countEl.classList.toggle('over', v.overLines);
+    inputEl.classList.toggle('error', v.overLines);
+    linesEl.innerHTML = '';
+    if (v.lines.length && v.lines.some(l => l !== '')) {
+      v.lines.forEach((line, i) => {
+        const div = document.createElement('div');
+        const over = i >= v.maxLines;
+        div.textContent = (i + 1) + '行目： ' + (line === '' ? '(空行)' : line) + (over ? '　※このままだとカードに入りきりません' : '');
+        if (over) div.classList.add('line-over');
+        linesEl.appendChild(div);
+      });
+    }
+  }
+
+  function updateTitleStatus() { updateFieldStatus(inputTitle, titleLineCountEl, titleLinesEl, validateTitleField); }
+  function updateFreeTextStatus() { updateFieldStatus(inputFreeText, freeTextLineCountEl, freeTextLinesEl, validateFreeTextField); }
+
+  function refreshAll() {
+    updateCharCount();
+    updateTitleStatus();
+    updateFreeTextStatus();
+    drawCard();
   }
 
   function getCoverScale(img, w, h) { return Math.max(w / img.width, h / img.height); }
@@ -625,11 +702,14 @@
     });
   });
 
-  [inputCatch, inputTitle, inputFreeText, inputPriceNormal, inputPriceEvent, ...qrLabelInputs, inputR18, inputZoom, inputCardColor, inputFontColor]
+  [inputCatch, inputPriceNormal, inputPriceEvent, ...qrLabelInputs, inputR18, inputZoom, inputCardColor, inputFontColor]
     .forEach(el => el.addEventListener('input', drawCard));
 
+  inputTitle.addEventListener('input', () => { updateTitleStatus(); drawCard(); });
+  inputFreeText.addEventListener('input', () => { updateFreeTextStatus(); drawCard(); });
+
   inputFont.addEventListener('change', () => {
-    document.fonts.load('20px ' + fontFamily()).then(drawCard).catch(drawCard);
+    document.fonts.load('20px ' + fontFamily()).then(refreshAll).catch(refreshAll);
   });
 
   inputSynopsis.addEventListener('input', () => { updateCharCount(); drawCard(); });
@@ -648,8 +728,7 @@
     inputCardColor.value = '#ffffff';
     inputFontColor.value = '#222222';
     layout = defaultLayout();
-    updateCharCount();
-    drawCard();
+    refreshAll();
   }
   btnClear.addEventListener('click', () => {
     if (!clearArmed) {
@@ -777,8 +856,7 @@
     qrLabelInputs[2].value = row.qrLabel3 || '';
     inputSynopsis.value = row.synopsis || '';
     inputR18.checked = (row.r18 || '').trim() !== '';
-    updateCharCount();
-    drawCard();
+    refreshAll();
     csvStatus.textContent = (i + 1) + '行目を適用しました。';
   });
 
@@ -824,6 +902,8 @@
         if (data.imageZoom) inputZoom.value = data.imageZoom;
         imgDragX = data.imgDragX || 0; imgDragY = data.imgDragY || 0;
         if (data.layout) layout = data.layout;
+        updateTitleStatus();
+        updateFreeTextStatus();
 
         const loaders = [];
         if (data.imageDataUrl) {
@@ -853,9 +933,17 @@
     reader.readAsText(file);
   });
 
-  updateCharCount();
-  document.fonts.ready.then(drawCard);
-  drawCard();
+  function openZoomPreview() {
+    previewZoomImg.src = canvas.toDataURL('image/png');
+    previewZoomOverlay.classList.add('open');
+  }
+  function closeZoomPreview() { previewZoomOverlay.classList.remove('open'); }
+  btnZoomPreview.addEventListener('click', openZoomPreview);
+  btnCloseZoom.addEventListener('click', closeZoomPreview);
+  previewZoomOverlay.addEventListener('click', e => { if (e.target === previewZoomOverlay) closeZoomPreview(); });
+
+  refreshAll();
+  document.fonts.ready.then(refreshAll);
 </script>
 </body>
 </html>
