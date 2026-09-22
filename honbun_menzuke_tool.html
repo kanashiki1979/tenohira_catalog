@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root {
     --accent: #0f6e6a;
@@ -127,10 +128,23 @@
 
   <div class="panel">
     <p class="panel-title">面付・印刷の流れ</p>
-    <p class="note">①「表面（谷折り面）」を出力してA4に印刷 → ②同じ用紙を裏返して再セットし「裏面（山折り面）」を出力して印刷（両面印刷機能を使う場合は<strong>短辺綴じ</strong>設定でご利用ください）→ ③各行を横に裁断 → ④中央の線で折って重ね、中綴じしてください。</p>
+    <p class="note" id="flowNoteJpg" style="display:none;">①「表面（谷折り面）」を出力してA4に印刷 → ②同じ用紙を裏返して再セットし「裏面（山折り面）」を出力して印刷（両面印刷機能を使う場合は<strong>短辺綴じ</strong>設定でご利用ください）→ ③各行を横に裁断 → ④中央の線で折って重ね、中綴じしてください。</p>
+    <p class="note" id="flowNotePdf">①PDFを1つダウンロード（表・裏が交互に並んだ1ファイルです）→ ②コンビニ等のマルチコピー機で「両面印刷」を<strong>短辺とじ</strong>に設定して印刷 → ③各行を横に裁断 → ④中央の線で折って重ね、中綴じしてください。</p>
+    <div class="checkbox-row" style="margin-top:0;">
+      <label style="display:flex; align-items:center; gap:5px; margin:0;">
+        <input type="radio" name="exportFormat" id="formatPdf" value="pdf" checked> PDF（両面印刷機能で自動的に両面印刷する方）
+      </label>
+      <label style="display:flex; align-items:center; gap:5px; margin:0 0 0 14px;">
+        <input type="radio" name="exportFormat" id="formatJpg" value="jpg"> JPG画像（表裏を用紙で手動反転して印刷する方）
+      </label>
+    </div>
+    <p class="note" style="margin:4px 0 0;">コンビニのマルチコピー機で両面印刷したい場合は「PDF」を選んでください。表と裏が1ファイルの中で交互のページ順に並ぶので、そのまま「両面印刷（短辺とじ）」を選ぶだけで正しく両面印刷できます。</p>
     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-      <button type="button" id="btnExportFront" class="btn" disabled>面付画像を出力（表面・山折り）</button>
-      <button type="button" id="btnExportBack" class="btn btn-outline" disabled>面付画像を出力（裏面・谷折り）</button>
+      <button type="button" id="btnExportPdfCombined" class="btn" disabled>両面印刷用PDFを出力（表裏1ファイル）</button>
+      <span id="jpgButtons" style="display:none; gap:10px; flex-wrap:wrap;">
+        <button type="button" id="btnExportFront" class="btn" disabled>面付データを出力（表面・山折り）</button>
+        <button type="button" id="btnExportBack" class="btn btn-outline" disabled>面付データを出力（裏面・谷折り）</button>
+      </span>
     </div>
     <div class="checkbox-row">
       <input type="checkbox" id="inputShowPageNum" checked>
@@ -144,7 +158,7 @@
     <div id="previewContent"></div>
   </div>
 
-  <footer>掌カタログ 本文面付ツール（試作版）</footer>
+  <footer>掌カタログ 本文面付ツール　｜　<a href="https://kanashiki1979.github.io/terms/" target="_blank" rel="noopener">制作・イベント支援ツール</a></footer>
 
   <div class="usage-notice">
     <div class="usage-notice-text">
@@ -166,7 +180,13 @@
   const pageListEl = document.getElementById('pageList');
   const btnExportFront = document.getElementById('btnExportFront');
   const btnExportBack = document.getElementById('btnExportBack');
+  const btnExportPdfCombined = document.getElementById('btnExportPdfCombined');
+  const jpgButtons = document.getElementById('jpgButtons');
+  const flowNoteJpg = document.getElementById('flowNoteJpg');
+  const flowNotePdf = document.getElementById('flowNotePdf');
   const inputShowPageNum = document.getElementById('inputShowPageNum');
+  const formatJpg = document.getElementById('formatJpg');
+  const formatPdf = document.getElementById('formatPdf');
   const previewPanel = document.getElementById('previewPanel');
   const previewContent = document.getElementById('previewContent');
 
@@ -276,6 +296,7 @@
     const ok = isValidCount(eff.length);
     btnExportFront.disabled = !ok;
     btnExportBack.disabled = !ok;
+    btnExportPdfCombined.disabled = !ok;
   }
 
   function computeSheets(P) {
@@ -414,19 +435,59 @@
     URL.revokeObjectURL(url);
   }
 
-  function exportSide(side, labelJp) {
-    const canvases = buildSidePages(side);
+  function exportSideAsJpg(canvases, labelJp) {
     canvases.forEach((c, i) => {
       setTimeout(() => {
         c.toBlob(blob => {
-          if (blob) downloadBlob(blob, '本文面付_' + labelJp + '_' + (i + 1) + 'of' + canvases.length + '.png');
-        }, 'image/png');
+          if (blob) downloadBlob(blob, '本文面付_' + labelJp + '_' + (i + 1) + 'of' + canvases.length + '.jpg');
+        }, 'image/jpeg', 0.92);
       }, i * 300);
     });
   }
 
+  function exportSide(side, labelJp) {
+    const canvases = buildSidePages(side);
+    exportSideAsJpg(canvases, labelJp);
+  }
+
   btnExportFront.addEventListener('click', () => exportSide('front', '表面'));
   btnExportBack.addEventListener('click', () => exportSide('back', '裏面'));
+
+  function exportCombinedPdf() {
+    const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : null;
+    if (!jsPDFCtor) {
+      alert('PDF出力用のライブラリを読み込めませんでした。通信環境をご確認のうえ、再度お試しください。');
+      return;
+    }
+    const frontCanvases = buildSidePages('front');
+    const backCanvases = buildSidePages('back');
+    const total = Math.max(frontCanvases.length, backCanvases.length);
+    const doc = new jsPDFCtor({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    // ページ順：表1→裏1→表2→裏2…と交互に並べる。両面印刷機能（短辺とじ）で
+    // そのまま印刷すれば、同じ用紙の表と裏に正しい組み合わせが印刷される。
+    let first = true;
+    for (let i = 0; i < total; i++) {
+      if (!first) doc.addPage('a4', 'portrait');
+      first = false;
+      if (frontCanvases[i]) doc.addImage(frontCanvases[i].toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+      doc.addPage('a4', 'portrait');
+      if (backCanvases[i]) doc.addImage(backCanvases[i].toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+    }
+    doc.save('本文面付_両面印刷用.pdf');
+  }
+
+  btnExportPdfCombined.addEventListener('click', exportCombinedPdf);
+
+  function updateFormatUI() {
+    const isPdf = formatPdf.checked;
+    jpgButtons.style.display = isPdf ? 'none' : 'flex';
+    btnExportPdfCombined.style.display = isPdf ? 'inline-block' : 'none';
+    flowNoteJpg.style.display = isPdf ? 'none' : '';
+    flowNotePdf.style.display = isPdf ? '' : 'none';
+  }
+  formatJpg.addEventListener('change', updateFormatUI);
+  formatPdf.addEventListener('change', updateFormatUI);
+  updateFormatUI();
 
   function renderPreview() {
     const eff = getEffectivePages();

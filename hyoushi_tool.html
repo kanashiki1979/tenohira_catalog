@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root {
     --accent: #0f6e6a;
@@ -218,11 +219,20 @@
       <input type="number" id="inputCopies" min="1" max="12" value="3">
     </label>
     <p class="note" style="margin-top:4px;">部数がA4に入りきらない場合は、自動的にページが追加されます。表紙は片面印刷のみで、中央の点線が折り位置です。</p>
-    <button type="button" id="btnExportPdf" class="btn btn-outline">面付画像を出力（A4・PNG）</button>
-    <p class="note" style="margin-top:4px;">印刷時は「実際のサイズ」「100%」を選んでください（自動縮小/拡大を選ぶとサイズがずれます）。</p>
+    <div class="checkbox-row" style="margin-top:0;">
+      <label style="display:flex; align-items:center; gap:5px; margin:0;">
+        <input type="radio" name="exportFormat" id="formatPdf" value="pdf" checked> PDF
+      </label>
+      <label style="display:flex; align-items:center; gap:5px; margin:0 0 0 14px;">
+        <input type="radio" name="exportFormat" id="formatJpg" value="jpg"> JPG画像
+      </label>
+    </div>
+    <p class="note" style="margin:4px 0 0;">コンビニのマルチコピー機で印刷する場合は「PDF」をおすすめします。JPG画像は機種側の自動フチ縮小やDPI解釈の違いでサイズが小さくずれることがありますが、PDFなら実寸（210mm×297mm）で正確に印刷できます。ページが複数枚になる場合もPDFなら1ファイルにまとまります。</p>
+    <button type="button" id="btnExportPdf" class="btn btn-outline">面付データを出力（A4）</button>
+    <p class="note" style="margin-top:4px;">印刷時は「実際のサイズ」「100%」（PDFの場合は「原寸」）を選んでください（自動縮小/拡大を選ぶとサイズがずれます）。</p>
   </div>
 
-  <footer>掌カタログ 表紙作成ツール（試作版）</footer>
+  <footer>掌カタログ 表紙作成ツール　｜　<a href="https://kanashiki1979.github.io/terms/" target="_blank" rel="noopener">制作・イベント支援ツール</a></footer>
 
   <div class="usage-notice">
     <div class="usage-notice-text">
@@ -263,6 +273,8 @@
   const btnDownloadPng = document.getElementById('btnDownloadPng');
   const inputCopies = document.getElementById('inputCopies');
   const btnExportPdf = document.getElementById('btnExportPdf');
+  const formatJpg = document.getElementById('formatJpg');
+  const formatPdf = document.getElementById('formatPdf');
   const btnExportJson = document.getElementById('btnExportJson');
   const inputJsonLoad = document.getElementById('inputJsonLoad');
   const jsonStatus = document.getElementById('jsonStatus');
@@ -553,7 +565,7 @@
     c.toBlob(blob => { if (blob) downloadBlob(blob, (inputCatalogName.value || '表紙') + '.png'); }, 'image/png');
   });
 
-  btnExportPdf.addEventListener('click', () => {
+  function buildMenzukePages() {
     const coverCanvas = renderExportCanvas();
 
     const DPI = 300;
@@ -568,6 +580,7 @@
     if (!copies || copies < 1) copies = 1;
     const pages = Math.ceil(copies / perPage);
 
+    const pageCanvases = [];
     for (let page = 0; page < pages; page++) {
       const pageCanvas = document.createElement('canvas');
       pageCanvas.width = PAGE_W; pageCanvas.height = PAGE_H;
@@ -607,9 +620,41 @@
         pctx.restore();
       }
 
-      pageCanvas.toBlob(blob => {
-        if (blob) downloadBlob(blob, (inputCatalogName.value || '表紙') + '_面付_' + (page + 1) + 'p.png');
-      }, 'image/png');
+      pageCanvases.push(pageCanvas);
+    }
+    return pageCanvases;
+  }
+
+  function exportMenzukeAsJpg(pageCanvases) {
+    pageCanvases.forEach((pageCanvas, i) => {
+      setTimeout(() => {
+        pageCanvas.toBlob(blob => {
+          if (blob) downloadBlob(blob, (inputCatalogName.value || '表紙') + '_面付_' + (i + 1) + 'of' + pageCanvases.length + '.jpg');
+        }, 'image/jpeg', 0.92);
+      }, i * 300);
+    });
+  }
+
+  function exportMenzukeAsPdf(pageCanvases) {
+    const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : null;
+    if (!jsPDFCtor) {
+      alert('PDF出力用のライブラリを読み込めませんでした。通信環境をご確認のうえ、再度お試しください。');
+      return;
+    }
+    const doc = new jsPDFCtor({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    pageCanvases.forEach((pageCanvas, i) => {
+      if (i > 0) doc.addPage('a4', 'portrait');
+      doc.addImage(pageCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+    });
+    doc.save((inputCatalogName.value || '表紙') + '_面付.pdf');
+  }
+
+  btnExportPdf.addEventListener('click', () => {
+    const pageCanvases = buildMenzukePages();
+    if (formatPdf.checked) {
+      exportMenzukeAsPdf(pageCanvases);
+    } else {
+      exportMenzukeAsJpg(pageCanvases);
     }
   });
 
