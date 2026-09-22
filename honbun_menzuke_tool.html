@@ -106,6 +106,23 @@
   .usage-notice-title { font-weight: 700; margin: 0 0 6px; color: var(--text); font-size: 13px; }
   .usage-notice-list { margin: 0; padding-left: 18px; font-size: 12px; color: #555; line-height: 1.7; }
   .usage-notice-link { font-size: 12px; font-weight: 700; color: var(--danger); text-decoration: underline; white-space: nowrap; }
+
+  .print-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: #FFF6DA;
+    border: 1px solid #E7C15A;
+    border-left: 4px solid #C98A00;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 10px 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: #6B4E00;
+    line-height: 1.6;
+  }
+  .print-warning .icon { flex-shrink: 0; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -139,6 +156,7 @@
       </label>
     </div>
     <p class="note" style="margin:4px 0 0;">コンビニのマルチコピー機で両面印刷したい場合は「PDF」を選んでください。表と裏が1ファイルの中で交互のページ順に並ぶので、そのまま「両面印刷（短辺とじ）」を選ぶだけで正しく両面印刷できます。</p>
+    <div class="print-warning"><span class="icon">⚠️</span><span>印刷時は必ず「実際のサイズ」「100%」（PDFの場合は「原寸」）を選んでください。自動縮小/拡大を選ぶとサイズがずれます。</span></div>
     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
       <button type="button" id="btnExportPdfCombined" class="btn" disabled>両面印刷用PDFを出力（表裏1ファイル）</button>
       <span id="jpgButtons" style="display:none; gap:10px; flex-wrap:wrap;">
@@ -150,7 +168,6 @@
       <input type="checkbox" id="inputShowPageNum" checked>
       <label for="inputShowPageNum">各ページ下部外側に小さくページ番号を入れる</label>
     </div>
-    <p class="note" style="margin-top:8px;">印刷時は「実際のサイズ」「100%」を選んでください（自動縮小/拡大を選ぶとサイズがずれます）。</p>
   </div>
 
   <div id="previewPanel" class="panel" style="display:none;">
