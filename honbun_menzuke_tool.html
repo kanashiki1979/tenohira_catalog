@@ -168,6 +168,10 @@
       <input type="checkbox" id="inputShowPageNum" checked>
       <label for="inputShowPageNum">各ページ下部外側に小さくページ番号を入れる</label>
     </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="inputShowRuler" checked>
+      <label for="inputShowRuler">用紙の下部に、寸法確認用の100mm目盛りを入れる（印刷が等倍か定規で確認できます）</label>
+    </div>
   </div>
 
   <div id="previewPanel" class="panel" style="display:none;">
@@ -202,6 +206,7 @@
   const flowNoteJpg = document.getElementById('flowNoteJpg');
   const flowNotePdf = document.getElementById('flowNotePdf');
   const inputShowPageNum = document.getElementById('inputShowPageNum');
+  const inputShowRuler = document.getElementById('inputShowRuler');
   const formatJpg = document.getElementById('formatJpg');
   const formatPdf = document.getElementById('formatPdf');
   const previewPanel = document.getElementById('previewPanel');
@@ -403,6 +408,36 @@
     ctx.restore();
   }
 
+  // 寸法確認用の目盛り：横100mm（下部中央）と縦100mm（左端）。
+  // 印刷後に定規を当てて100mmなら等倍、短ければ機械側で縮小されています。
+  function drawScaleRuler(ctx) {
+    ctx.save();
+    ctx.strokeStyle = '#000';
+    ctx.fillStyle = '#000';
+    ctx.lineWidth = Math.max(1, mm(0.2));
+    ctx.setLineDash([]);
+
+    const hx0 = PAGE_W / 2 - mm(50), hx1 = PAGE_W / 2 + mm(50), hy = PAGE_H - mm(18);
+    ctx.beginPath();
+    ctx.moveTo(hx0, hy); ctx.lineTo(hx1, hy);
+    ctx.moveTo(hx0, hy - mm(2)); ctx.lineTo(hx0, hy + mm(2));
+    ctx.moveTo(hx1, hy - mm(2)); ctx.lineTo(hx1, hy + mm(2));
+    ctx.stroke();
+
+    const vx = mm(12), vy0 = PAGE_H / 2 - mm(50), vy1 = PAGE_H / 2 + mm(50);
+    ctx.beginPath();
+    ctx.moveTo(vx, vy0); ctx.lineTo(vx, vy1);
+    ctx.moveTo(vx - mm(2), vy0); ctx.lineTo(vx + mm(2), vy0);
+    ctx.moveTo(vx - mm(2), vy1); ctx.lineTo(vx + mm(2), vy1);
+    ctx.stroke();
+
+    ctx.font = Math.round(mm(3)) + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('この線が100mmなら等倍で印刷されています（縦横とも）', PAGE_W / 2, hy + mm(3));
+    ctx.restore();
+  }
+
   function buildSidePages(side) {
     const pagesForBuild = getEffectivePages();
     const P = pagesForBuild.length;
@@ -427,6 +462,8 @@
         drawFoldLine(ctx, MARGIN_X + ITEM_W / 2, y, ITEM_H, side);
         if (inputShowPageNum.checked) drawPageNumbers(ctx, row, MARGIN_X, y, ITEM_W, ITEM_H);
       });
+
+      if (inputShowRuler.checked) drawScaleRuler(ctx);
 
       ctx.fillStyle = '#000';
       ctx.font = Math.round(mm(3.2)) + 'px sans-serif';
@@ -573,6 +610,7 @@
 
   inputPadBlank.addEventListener('change', refreshAll);
   inputShowPageNum.addEventListener('change', refreshAll);
+  inputShowRuler.addEventListener('change', refreshAll);
 
   updateStatus();
 </script>

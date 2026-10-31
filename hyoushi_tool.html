@@ -223,7 +223,7 @@
       <p class="panel-title">作業データの保存／読込</p>
       <button type="button" id="btnExportJson" class="btn btn-outline">JSONで保存（画像込み・後日再開用）</button>
       <label>JSONを読み込む
-        <input type="file" id="inputJsonLoad" accept="application/json">
+        <input type="file" id="inputJsonLoad" accept=".json">
       </label>
       <div id="jsonStatus" class="status-text"></div>
     </div>
@@ -246,6 +246,10 @@
     </div>
     <p class="note" style="margin:4px 0 0;">コンビニのマルチコピー機で印刷する場合は「PDF」をおすすめします。JPG画像は機種側の自動フチ縮小やDPI解釈の違いでサイズが小さくずれることがありますが、PDFなら実寸（210mm×297mm）で正確に印刷できます。ページが複数枚になる場合もPDFなら1ファイルにまとまります。</p>
     <div class="print-warning"><span class="icon">⚠️</span><span>印刷時は必ず「実際のサイズ」「100%」（PDFの場合は「原寸」）を選んでください。自動縮小/拡大を選ぶとサイズがずれます。</span></div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="inputShowRuler" checked>
+      <label for="inputShowRuler">用紙の下部に、寸法確認用の100mm目盛りを入れる（印刷が等倍か定規で確認できます）</label>
+    </div>
     <button type="button" id="btnExportPdf" class="btn btn-outline">面付データを出力（A4）</button>
   </div>
 
@@ -292,6 +296,7 @@
   const btnExportPdf = document.getElementById('btnExportPdf');
   const formatJpg = document.getElementById('formatJpg');
   const formatPdf = document.getElementById('formatPdf');
+  const inputShowRuler = document.getElementById('inputShowRuler');
   const btnExportJson = document.getElementById('btnExportJson');
   const inputJsonLoad = document.getElementById('inputJsonLoad');
   const jsonStatus = document.getElementById('jsonStatus');
@@ -570,6 +575,10 @@
     const prev = activeCtx; activeCtx = exCtx; drawCard(true); activeCtx = prev;
     return c;
   }
+  function sanitizeFilename(name) {
+    const cleaned = String(name).replace(/[\\/:*?"<>|]/g, '_').trim();
+    return cleaned || '無題';
+  }
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -579,8 +588,39 @@
   }
   btnDownloadPng.addEventListener('click', () => {
     const c = renderExportCanvas();
-    c.toBlob(blob => { if (blob) downloadBlob(blob, (inputCatalogName.value || '表紙') + '.png'); }, 'image/png');
+    c.toBlob(blob => { if (blob) downloadBlob(blob, sanitizeFilename(inputCatalogName.value || '表紙') + '.png'); }, 'image/png');
   });
+
+  // 寸法確認用の目盛り：横100mm（下部中央）と縦100mm（左端）。
+  // 印刷後に定規を当てて100mmなら等倍、短ければ機械側で縮小されています。
+  function drawScaleRuler(ctx, pageW, pageH, mmToPx) {
+    const mm = v => v * mmToPx;
+    ctx.save();
+    ctx.strokeStyle = '#000';
+    ctx.fillStyle = '#000';
+    ctx.lineWidth = Math.max(1, mm(0.2));
+    ctx.setLineDash([]);
+
+    const hx0 = pageW / 2 - mm(50), hx1 = pageW / 2 + mm(50), hy = pageH - mm(18);
+    ctx.beginPath();
+    ctx.moveTo(hx0, hy); ctx.lineTo(hx1, hy);
+    ctx.moveTo(hx0, hy - mm(2)); ctx.lineTo(hx0, hy + mm(2));
+    ctx.moveTo(hx1, hy - mm(2)); ctx.lineTo(hx1, hy + mm(2));
+    ctx.stroke();
+
+    const vx = mm(12), vy0 = pageH / 2 - mm(50), vy1 = pageH / 2 + mm(50);
+    ctx.beginPath();
+    ctx.moveTo(vx, vy0); ctx.lineTo(vx, vy1);
+    ctx.moveTo(vx - mm(2), vy0); ctx.lineTo(vx + mm(2), vy0);
+    ctx.moveTo(vx - mm(2), vy1); ctx.lineTo(vx + mm(2), vy1);
+    ctx.stroke();
+
+    ctx.font = Math.round(mm(3)) + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('この線が100mmなら等倍で印刷されています（縦横とも）', pageW / 2, hy + mm(3));
+    ctx.restore();
+  }
 
   function buildMenzukePages() {
     const coverCanvas = renderExportCanvas();
@@ -637,6 +677,8 @@
         pctx.restore();
       }
 
+      if (inputShowRuler.checked) drawScaleRuler(pctx, PAGE_W, PAGE_H, MM_TO_PX);
+
       pageCanvases.push(pageCanvas);
     }
     return pageCanvases;
@@ -646,7 +688,7 @@
     pageCanvases.forEach((pageCanvas, i) => {
       setTimeout(() => {
         pageCanvas.toBlob(blob => {
-          if (blob) downloadBlob(blob, (inputCatalogName.value || '表紙') + '_面付_' + (i + 1) + 'of' + pageCanvases.length + '.jpg');
+          if (blob) downloadBlob(blob, sanitizeFilename(inputCatalogName.value || '表紙') + '_面付_' + (i + 1) + 'of' + pageCanvases.length + '.jpg');
         }, 'image/jpeg', 0.92);
       }, i * 300);
     });
@@ -663,7 +705,7 @@
       if (i > 0) doc.addPage('a4', 'portrait');
       doc.addImage(pageCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
     });
-    doc.save((inputCatalogName.value || '表紙') + '_面付.pdf');
+    doc.save(sanitizeFilename(inputCatalogName.value || '表紙') + '_面付.pdf');
   }
 
   btnExportPdf.addEventListener('click', () => {
@@ -746,7 +788,7 @@
 
   btnExportJson.addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(getStateSnapshot(), null, 2)], { type: 'application/json' });
-    downloadBlob(blob, (inputCatalogName.value || '表紙') + '.json');
+    downloadBlob(blob, sanitizeFilename(inputCatalogName.value || '表紙') + '.json');
   });
 
   inputJsonLoad.addEventListener('change', e => {

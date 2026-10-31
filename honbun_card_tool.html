@@ -276,7 +276,7 @@
       <p class="panel-title">作業データの保存／読込</p>
       <button type="button" id="btnExportJson" class="btn btn-outline">JSONで保存（画像込み・後日再開用）</button>
       <label>JSONを読み込む
-        <input type="file" id="inputJsonLoad" accept=".json,application/json">
+        <input type="file" id="inputJsonLoad" accept=".json">
       </label>
       <div id="jsonStatus" class="status-text"></div>
     </div>
@@ -758,6 +758,10 @@
     const prev = activeCtx; activeCtx = exCtx; drawCard(); activeCtx = prev;
     return c;
   }
+  function sanitizeFilename(name) {
+    const cleaned = String(name).replace(/[\\/:*?"<>|]/g, '_').trim();
+    return cleaned || '無題';
+  }
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -770,7 +774,7 @@
   }
   btnDownloadSingle.addEventListener('click', () => {
     const c = renderExportCanvas();
-    downloadCanvasAsPng(c, (inputTitle.value || '本文カード') + '.png');
+    downloadCanvasAsPng(c, sanitizeFilename(inputTitle.value || '本文カード') + '.png');
   });
 
   const CSV_HEADER_MAP = {
@@ -879,7 +883,7 @@
       layout
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    downloadBlob(blob, (inputTitle.value || '本文カード') + '.json');
+    downloadBlob(blob, sanitizeFilename(inputTitle.value || '本文カード') + '.json');
   });
 
   inputJsonLoad.addEventListener('change', e => {
