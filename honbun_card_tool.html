@@ -207,12 +207,13 @@
     <div class="panel">
       <p class="panel-title">価格</p>
       <label>通常価格（例：¥1,200）
-        <input type="text" id="inputPriceNormal">
+        <input type="text" id="inputPriceNormal" value="¥">
       </label>
       <label>イベント価格（空欄なら通常価格のみ大きく表示）
-        <input type="text" id="inputPriceEvent">
+        <input type="text" id="inputPriceEvent" value="¥">
       </label>
-      <p class="note" style="margin-top:6px;">価格とQRコードはプレビュー上でそれぞれ別々にドラッグ移動できます。</p>
+      <p class="note" style="margin-top:6px;">最初から「¥」が入っています。続けて数字を入力してください（「円」表記にしたい場合は「¥」を消して入力できます）。「¥」だけの状態は未入力として扱われ、カードには表示されません。</p>
+      <p class="note" style="margin-top:4px;">価格とQRコードはプレビュー上でそれぞれ別々にドラッグ移動できます。</p>
     </div>
 
     <div class="panel">
@@ -260,6 +261,7 @@
 
     <div class="panel">
       <p class="panel-title">CSVから一括投入（文字情報のみ・画像は含みません）</p>
+      <p class="note"><strong>CSV一括投入はPCでのご利用をおすすめします。</strong>スマホでは、1枚ずつの入力と「JSONで保存」をご利用ください（スマホのスプレッドシートアプリでは、CSVを開けない・編集できない場合があります）。</p>
       <p class="note">CSVから一括登録の際は、次のテンプレートを使用してください。</p>
       <p class="note">価格などカンマを含む値は、Excel等で保存すれば自動的に "1,200" のようにダブルクォートで囲まれるので、そのままご利用いただけます。</p>
       <p class="note">R18列は、何か記載があればR18として扱われます（空欄ならR18ではない）。</p>
@@ -357,7 +359,13 @@
   function fontFamily() { return inputFont.value; }
   function hasHeader() { return inputCatch.value.trim() !== '' || inputTitle.value.trim() !== '' || inputFreeText.value.trim() !== ''; }
   function qrCount() { return qrLabelInputs.filter((el, i) => qrImages[i] || el.value.trim() !== '').length; }
-  function hasPriceText() { return inputPriceNormal.value.trim() !== '' || inputPriceEvent.value.trim() !== ''; }
+  const YEN_DEFAULT = '¥';
+  // 「¥」だけ（初期値のまま）は未入力として扱う
+  function priceValue(el) {
+    const v = el.value.trim();
+    return (v === '' || /^[¥￥]$/.test(v)) ? '' : v;
+  }
+  function hasPriceText() { return priceValue(inputPriceNormal) !== '' || priceValue(inputPriceEvent) !== ''; }
   function hasQr() { return qrCount() > 0; }
   function hasSynopsis() { return inputSynopsis.value.trim() !== ''; }
   function activeQrIndexes() {
@@ -534,8 +542,8 @@
     if (hasPriceText()) {
       const pz = layout.priceText;
       const py = pz.y + 20;
-      const normal = inputPriceNormal.value.trim();
-      const event = inputPriceEvent.value.trim();
+      const normal = priceValue(inputPriceNormal);
+      const event = priceValue(inputPriceEvent);
       activeCtx.textAlign = 'left';
       if (normal !== '' && event !== '') {
         activeCtx.font = '13px ' + fontFamily();
@@ -702,6 +710,10 @@
     });
   });
 
+  [inputPriceNormal, inputPriceEvent].forEach(el => el.addEventListener('focus', () => {
+    setTimeout(() => { const n = el.value.length; el.setSelectionRange(n, n); }, 0);
+  }));
+
   [inputCatch, inputPriceNormal, inputPriceEvent, ...qrLabelInputs, inputR18, inputZoom, inputCardColor, inputFontColor]
     .forEach(el => el.addEventListener('input', drawCard));
 
@@ -717,7 +729,9 @@
   let clearArmed = false;
   let clearTimer = null;
   function doClear() {
-    [inputCatch, inputTitle, inputFreeText, inputPriceNormal, inputPriceEvent, inputSynopsis].forEach(el => el.value = '');
+    [inputCatch, inputTitle, inputFreeText, inputSynopsis].forEach(el => el.value = '');
+    inputPriceNormal.value = YEN_DEFAULT;
+    inputPriceEvent.value = YEN_DEFAULT;
     qrLabelInputs.forEach(el => el.value = '');
     qrImgInputs.forEach(el => el.value = '');
     qrImages = [null, null, null];
@@ -853,8 +867,8 @@
     inputCatch.value = row.catch || '';
     inputTitle.value = row.title || '';
     inputFreeText.value = row.freeText || '';
-    inputPriceNormal.value = row.priceNormal || '';
-    inputPriceEvent.value = row.priceEvent || '';
+    inputPriceNormal.value = row.priceNormal || YEN_DEFAULT;
+    inputPriceEvent.value = row.priceEvent || YEN_DEFAULT;
     qrLabelInputs[0].value = row.qrLabel1 || '';
     qrLabelInputs[1].value = row.qrLabel2 || '';
     qrLabelInputs[2].value = row.qrLabel3 || '';
@@ -895,8 +909,8 @@
         inputCatch.value = data.catch || '';
         inputTitle.value = data.title || '';
         inputFreeText.value = data.freeText || '';
-        inputPriceNormal.value = data.priceNormal || '';
-        inputPriceEvent.value = data.priceEvent || '';
+        inputPriceNormal.value = data.priceNormal || YEN_DEFAULT;
+        inputPriceEvent.value = data.priceEvent || YEN_DEFAULT;
         (data.qrLabels || []).forEach((v, i) => { if (qrLabelInputs[i]) qrLabelInputs[i].value = v; });
         inputSynopsis.value = data.synopsis || '';
         inputR18.checked = !!data.r18;
