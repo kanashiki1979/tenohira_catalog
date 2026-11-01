@@ -157,6 +157,20 @@
     </div>
     <p class="note" style="margin:4px 0 0;">コンビニのマルチコピー機で両面印刷したい場合は「PDF」を選んでください。表と裏が1ファイルの中で交互のページ順に並ぶので、そのまま「両面印刷（短辺とじ）」を選ぶだけで正しく両面印刷できます。</p>
     <div class="print-warning"><span class="icon">⚠️</span><span>印刷時は必ず「実際のサイズ」「100%」（PDFの場合は「原寸」）を選んでください。自動縮小/拡大を選ぶとサイズがずれます。</span></div>
+    <p class="note" style="margin:8px 0 0;"><strong>コンビニ印刷（マルチコピー機）での出力を推奨します。</strong>家庭用プリンターは両面印刷の位置が1〜2mmずれやすく、表と裏がぴったり重ならないことがあります。</p>
+    <p class="panel-title" style="margin:12px 0 4px;">裁断ガイド（枠線）</p>
+    <div class="checkbox-row" style="margin-top:0;">
+      <label style="display:flex; align-items:center; gap:5px; margin:0;">
+        <input type="radio" name="cutGuide" id="cutGuideNone" value="none"> 枠線なし
+      </label>
+      <label style="display:flex; align-items:center; gap:5px; margin:0 0 0 14px;">
+        <input type="radio" name="cutGuide" id="cutGuideCorner" value="corner" checked> 角のみ
+      </label>
+      <label style="display:flex; align-items:center; gap:5px; margin:0 0 0 14px;">
+        <input type="radio" name="cutGuide" id="cutGuideFull" value="full"> 枠線あり
+      </label>
+    </div>
+    <p class="note" style="margin:4px 0 0;">「角のみ」は位置が正確なコンビニ印刷向けです。家庭用プリンターで手切りする場合は、裁断線を用紙の端近くまで延ばす「枠線あり」にすると、定規やカッターを当てやすくなります。「枠線なし」は裁断用の線を一切印刷しません（中央の折り線は残ります）。カードの縁を目印に切ることになるので、背景が白いカードや空白ページでは縁が見えにくくなります。</p>
     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
       <button type="button" id="btnExportPdfCombined" class="btn" disabled>両面印刷用PDFを出力（表裏1ファイル）</button>
       <span id="jpgButtons" style="display:none; gap:10px; flex-wrap:wrap;">
@@ -207,6 +221,9 @@
   const flowNotePdf = document.getElementById('flowNotePdf');
   const inputShowPageNum = document.getElementById('inputShowPageNum');
   const inputShowRuler = document.getElementById('inputShowRuler');
+  const inputCutGuideNone = document.getElementById('cutGuideNone');
+  const inputCutGuideFull = document.getElementById('cutGuideFull');
+  const inputCutGuideCorner = document.getElementById('cutGuideCorner');
   const formatJpg = document.getElementById('formatJpg');
   const formatPdf = document.getElementById('formatPdf');
   const previewPanel = document.getElementById('previewPanel');
@@ -248,7 +265,7 @@
     const target = nextMultipleOf4(n);
     if (target > 16) return pages;
     const padded = pages.slice();
-    while (padded.length < target) padded.push({ img: blankImage, name: '（空白ページ）' });
+    while (padded.length < target) padded.push({ img: blankImage, name: '（空白ページ）', blank: true });
     return padded;
   }
 
@@ -347,13 +364,20 @@
     ctx.save();
     ctx.strokeStyle = '#000';
     ctx.lineWidth = Math.max(1, mm(0.15));
+    if (inputCutGuideNone.checked) { ctx.restore(); return; } // 枠線なし：裁断用の線は出さない
     const len = mm(4), gap = mm(1);
+    // 「枠線あり」：横方向の裁断線を用紙の端の手前まで延ばす（紙端ぎりぎりまでは引かない）
+    const edge = mm(6);
+    const full = inputCutGuideFull.checked;
     const corners = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]];
     corners.forEach(([cx, cy]) => {
       const sx = cx < x + w / 2 ? -1 : 1;
       const sy = cy < y + h / 2 ? -1 : 1;
+      const hEnd = full
+        ? (sx < 0 ? edge : ctx.canvas.width - edge)
+        : cx + sx * (gap + len);
       ctx.beginPath();
-      ctx.moveTo(cx + sx * gap, cy); ctx.lineTo(cx + sx * (gap + len), cy);
+      ctx.moveTo(cx + sx * gap, cy); ctx.lineTo(hEnd, cy);
       ctx.moveTo(cx, cy + sy * gap); ctx.lineTo(cx, cy + sy * (gap + len));
       ctx.stroke();
     });
@@ -395,17 +419,34 @@
     ctx.restore();
   }
 
-  function drawPageNumbers(ctx, row, x, y, w, h) {
+  // 空白ページ（メモ用）にはページ番号を入れない
+  function drawPageNumbers(ctx, row, x, y, w, h, skipLeft, skipRight) {
     ctx.save();
     ctx.fillStyle = '#555';
     ctx.font = Math.round(mm(2.6)) + 'px sans-serif';
     const pad = mm(2);
     ctx.textBaseline = 'bottom';
-    ctx.textAlign = 'left';
-    ctx.fillText(String(row.left), x + pad, y + h - pad);
-    ctx.textAlign = 'right';
-    ctx.fillText(String(row.right), x + w - pad, y + h - pad);
+    if (!skipLeft) {
+      ctx.textAlign = 'left';
+      ctx.fillText(String(row.left), x + pad, y + h - pad);
+    }
+    if (!skipRight) {
+      ctx.textAlign = 'right';
+      ctx.fillText(String(row.right), x + w - pad, y + h - pad);
+    }
     ctx.restore();
+  }
+
+  // forPrint=true の空白ページは完全な白紙にする（プレビューでは薄い「空白ページ」表示を残す）
+  function drawPage(ctx, page, x, y, w, h, forPrint) {
+    if (page.blank && forPrint) {
+      ctx.save();
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+    } else {
+      drawImageContain(ctx, page.img, x, y, w, h);
+    }
   }
 
   // 寸法確認用の目盛り：横100mm（下部中央）と縦100mm（左端）。
@@ -438,7 +479,7 @@
     ctx.restore();
   }
 
-  function buildSidePages(side) {
+  function buildSidePages(side, forPrint) {
     const pagesForBuild = getEffectivePages();
     const P = pagesForBuild.length;
     const sheets = computeSheets(P);
@@ -456,11 +497,13 @@
       const rowsHere = rows.slice(pageIdx * PER_PAGE, pageIdx * PER_PAGE + PER_PAGE);
       rowsHere.forEach((row, r) => {
         const y = MARGIN_TOP + r * (ITEM_H + GAP);
-        drawImageContain(ctx, pagesForBuild[row.left - 1].img, MARGIN_X, y, ITEM_W / 2, ITEM_H);
-        drawImageContain(ctx, pagesForBuild[row.right - 1].img, MARGIN_X + ITEM_W / 2, y, ITEM_W / 2, ITEM_H);
+        const leftPage = pagesForBuild[row.left - 1];
+        const rightPage = pagesForBuild[row.right - 1];
+        drawPage(ctx, leftPage, MARGIN_X, y, ITEM_W / 2, ITEM_H, forPrint);
+        drawPage(ctx, rightPage, MARGIN_X + ITEM_W / 2, y, ITEM_W / 2, ITEM_H, forPrint);
         drawTombo(ctx, MARGIN_X, y, ITEM_W, ITEM_H);
         drawFoldLine(ctx, MARGIN_X + ITEM_W / 2, y, ITEM_H, side);
-        if (inputShowPageNum.checked) drawPageNumbers(ctx, row, MARGIN_X, y, ITEM_W, ITEM_H);
+        if (inputShowPageNum.checked) drawPageNumbers(ctx, row, MARGIN_X, y, ITEM_W, ITEM_H, !!leftPage.blank, !!rightPage.blank);
       });
 
       if (inputShowRuler.checked) drawScaleRuler(ctx);
@@ -500,7 +543,7 @@
   }
 
   function exportSide(side, labelJp) {
-    const canvases = buildSidePages(side);
+    const canvases = buildSidePages(side, true);
     exportSideAsJpg(canvases, labelJp);
   }
 
@@ -513,8 +556,8 @@
       alert('PDF出力用のライブラリを読み込めませんでした。通信環境をご確認のうえ、再度お試しください。');
       return;
     }
-    const frontCanvases = buildSidePages('front');
-    const backCanvases = buildSidePages('back');
+    const frontCanvases = buildSidePages('front', true);
+    const backCanvases = buildSidePages('back', true);
     const total = Math.max(frontCanvases.length, backCanvases.length);
     const doc = new jsPDFCtor({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     // ページ順：表1→裏1→表2→裏2…と交互に並べる。両面印刷機能（短辺とじ）で
@@ -611,6 +654,9 @@
   inputPadBlank.addEventListener('change', refreshAll);
   inputShowPageNum.addEventListener('change', refreshAll);
   inputShowRuler.addEventListener('change', refreshAll);
+  inputCutGuideNone.addEventListener('change', refreshAll);
+  inputCutGuideFull.addEventListener('change', refreshAll);
+  inputCutGuideCorner.addEventListener('change', refreshAll);
 
   updateStatus();
 </script>
