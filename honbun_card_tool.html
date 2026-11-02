@@ -158,8 +158,14 @@
 <body>
 <div class="app-container">
   <h1>掌カタログ 本文カード作成ツール</h1>
-  <p class="note">アップロードした画像はこのページ内でのみ使用され、送信・保存は行われません。1ページ＝7cm四方のカードを1枚ずつ作成します。</p>
+  <p class="note">アップロードした画像はこのページ内でのみ使用され、外部への送信は行われません（保存先はこのブラウザ内のみです）。1ページ＝7cm四方のカードを1枚ずつ作成します。</p>
   <p class="note">使い方に迷ったら、HS書架様の <a href="https://note.com/hs_syoka/n/n90b6101dbedb" target="_blank" rel="noopener">「カタログの作り方」のページ ↗</a> もご参考ください。</p>
+  <p class="note">入力内容はこのブラウザ内に自動保存されます（他の端末とは共有されません）。環境によっては自動保存されないことがあります。大切な作業は「JSONで保存」でも残してください。<span id="autosaveStatus"></span></p>
+  <div class="checkbox-row" style="width:100%;">
+    <input type="checkbox" id="inputAutoRestore" checked>
+    <label for="inputAutoRestore">次回このページを開いたときに自動で復元する</label>
+    <button type="button" id="btnLoadAutosave" class="btn btn-outline" style="width:auto; margin:0 0 0 auto; padding:6px 12px;">保存内容を読み込む</button>
+  </div>
 
   <div id="preview-area">
     <div class="preview-panel">
@@ -259,6 +265,7 @@
     </div>
 
     <button type="button" id="btnClear" class="btn btn-danger">入力内容をクリア</button>
+    <button type="button" id="btnRestoreBackup" class="btn btn-outline" style="display:none;">クリア直前の内容を復元</button>
 
     <div class="panel">
       <p class="panel-title">CSVから一括投入（文字情報のみ・画像は含みません）</p>
@@ -287,7 +294,7 @@
   </div>
 
   <footer>掌カタログ 本文カード作成ツール　｜　<a href="https://kanashiki1979.github.io/terms/" target="_blank" rel="noopener">制作・イベント支援ツール</a></footer>
-  <div class="ver-info">Ver. 2026/11/01 16:40</div>
+  <div class="ver-info">Ver:202611021106</div>
 
   <div class="usage-notice">
     <div class="usage-notice-text">
@@ -325,6 +332,10 @@
   const inputCardColor = document.getElementById('inputCardColor');
   const inputFontColor = document.getElementById('inputFontColor');
   const btnClear = document.getElementById('btnClear');
+  const btnRestoreBackup = document.getElementById('btnRestoreBackup');
+  const autosaveStatus = document.getElementById('autosaveStatus');
+  const inputAutoRestore = document.getElementById('inputAutoRestore');
+  const btnLoadAutosave = document.getElementById('btnLoadAutosave');
   const btnDownloadSingle = document.getElementById('btnDownloadSingle');
   const btnDownloadCsvTemplate = document.getElementById('btnDownloadCsvTemplate');
   const inputCsvFile = document.getElementById('inputCsvFile');
@@ -678,7 +689,7 @@
     drawCard();
   }
 
-  function endDrag() { dragMode = null; canvas.classList.remove('dragging'); }
+  function endDrag() { if (dragMode) scheduleAutosave(); dragMode = null; canvas.classList.remove('dragging'); }
 
   canvas.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
   window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
@@ -693,7 +704,7 @@
     const reader = new FileReader();
     reader.onload = ev => {
       const img = new Image();
-      img.onload = () => { uploadedImage = img; imgDragX = 0; imgDragY = 0; drawCard(); };
+      img.onload = () => { uploadedImage = img; imgDragX = 0; imgDragY = 0; drawCard(); scheduleAutosave(true); };
       img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
@@ -705,7 +716,7 @@
       const reader = new FileReader();
       reader.onload = ev => {
         const img = new Image();
-        img.onload = () => { qrImages[i] = img; drawCard(); };
+        img.onload = () => { qrImages[i] = img; drawCard(); scheduleAutosave(true); };
         img.src = ev.target.result;
       };
       reader.readAsDataURL(file);
@@ -731,6 +742,7 @@
   let clearArmed = false;
   let clearTimer = null;
   function doClear() {
+    saveBackup();
     [inputCatch, inputTitle, inputFreeText, inputSynopsis].forEach(el => el.value = '');
     inputPriceNormal.value = YEN_DEFAULT;
     inputPriceEvent.value = YEN_DEFAULT;
@@ -745,6 +757,8 @@
     inputFontColor.value = '#222222';
     layout = defaultLayout();
     refreshAll();
+    scheduleAutosave(true);
+    updateRestoreButtonVisibility();
   }
   btnClear.addEventListener('click', () => {
     if (!clearArmed) {
@@ -877,28 +891,196 @@
     inputSynopsis.value = row.synopsis || '';
     inputR18.checked = (row.r18 || '').trim() !== '';
     refreshAll();
+    scheduleAutosave();
     csvStatus.textContent = (i + 1) + '行目を適用しました。';
   });
 
   function imgToDataUrl(img) { return img ? img.src : null; }
 
-  btnExportJson.addEventListener('click', () => {
-    const data = {
+  // 文字・設定（localStorageに即時保存）と、画像（IndexedDBに保存）を分けて扱う
+  function getImageSnapshot() {
+    return { imageDataUrl: imgToDataUrl(uploadedImage), qrImages: qrImages.map(imgToDataUrl) };
+  }
+  function getStateSnapshot(withImages = true) {
+    const t = {
       catch: inputCatch.value, title: inputTitle.value, freeText: inputFreeText.value,
       priceNormal: inputPriceNormal.value, priceEvent: inputPriceEvent.value,
       qrLabels: qrLabelInputs.map(el => el.value),
-      qrImages: qrImages.map(imgToDataUrl),
       synopsis: inputSynopsis.value,
       r18: inputR18.checked,
       font: inputFont.value,
       bgColor: inputCardColor.value,
       fontColor: inputFontColor.value,
-      imageDataUrl: imgToDataUrl(uploadedImage),
       imageZoom: inputZoom.value,
       imgDragX, imgDragY,
       layout
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    return withImages ? Object.assign(t, getImageSnapshot()) : t;
+  }
+
+  function applyTextState(data) {
+    inputCatch.value = data.catch || '';
+    inputTitle.value = data.title || '';
+    inputFreeText.value = data.freeText || '';
+    inputPriceNormal.value = data.priceNormal || YEN_DEFAULT;
+    inputPriceEvent.value = data.priceEvent || YEN_DEFAULT;
+    qrLabelInputs.forEach((el, i) => { el.value = (data.qrLabels || [])[i] || ''; });
+    inputSynopsis.value = data.synopsis || '';
+    inputR18.checked = !!data.r18;
+    if (data.font) inputFont.value = data.font;
+    if (data.bgColor) inputCardColor.value = data.bgColor;
+    if (data.fontColor) inputFontColor.value = data.fontColor;
+    inputZoom.value = data.imageZoom || 1;
+    imgDragX = data.imgDragX || 0; imgDragY = data.imgDragY || 0;
+    if (data.layout) layout = data.layout;
+    refreshAll();
+  }
+
+  // onlyIfEmpty=true: すでに画像が入っている枠は上書きしない（起動時の自動復元用）
+  function applyImageState(data, onDone, onlyIfEmpty) {
+    if (!onlyIfEmpty) { uploadedImage = null; qrImages = [null, null, null]; }
+    const loaders = [];
+    if (data.imageDataUrl) {
+      loaders.push(new Promise(res => {
+        const img = new Image();
+        img.onload = () => { if (!onlyIfEmpty || !uploadedImage) uploadedImage = img; res(); };
+        img.onerror = () => res();
+        img.src = data.imageDataUrl;
+      }));
+    }
+    (data.qrImages || []).forEach((src, i) => {
+      if (src && i < 3) {
+        loaders.push(new Promise(res => {
+          const img = new Image();
+          img.onload = () => { if (!onlyIfEmpty || !qrImages[i]) qrImages[i] = img; res(); };
+          img.onerror = () => res();
+          img.src = src;
+        }));
+      }
+    });
+    drawCard();
+    Promise.all(loaders).then(() => { drawCard(); if (onDone) onDone(); });
+  }
+
+  function applyStateSnapshot(data, onDone) {
+    applyTextState(data);
+    applyImageState(data, onDone, false);
+  }
+
+  const AUTOSAVE_KEY = 'tewara_honbun_card_autosave_v1';
+  const BACKUP_KEY = 'tewara_honbun_card_backup_v1';
+  const AUTORESTORE_PREF_KEY = 'tewara_honbun_card_autorestore_pref';
+  const AUTOSAVE_IMG_KEY = 'autosave_images_v1';
+  const BACKUP_IMG_KEY = 'backup_images_v1';
+  const IDB_NAME = 'tewara_honbun_card';
+  const IDB_STORE = 'kv';
+
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+      req.onblocked = () => reject(new Error('blocked'));
+    });
+  }
+  function idbSet(key, value) {
+    return idbOpen().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = tx.onabort = () => { db.close(); reject(tx.error); };
+    }));
+  }
+  function idbGet(key) {
+    return idbOpen().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => { db.close(); resolve(req.result); };
+      req.onerror = () => { db.close(); reject(req.error); };
+    }));
+  }
+
+  function getAutoRestorePref() {
+    try { const v = localStorage.getItem(AUTORESTORE_PREF_KEY); return v === null ? true : v === '1'; }
+    catch (e) { return true; }
+  }
+  function setAutoRestorePref(v) {
+    try { localStorage.setItem(AUTORESTORE_PREF_KEY, v ? '1' : '0'); } catch (e) { /* storage unavailable: skip silently */ }
+  }
+
+  const MSG_IMG_FAIL = '（画像を自動保存できませんでした。文字と設定のみ保存しています。画像は「JSONで保存」をご利用ください）';
+  const MSG_TEXT_FAIL = '（自動保存できませんでした。「JSONで保存」をご利用ください）';
+
+  function saveTextTo(key) {
+    try { localStorage.setItem(key, JSON.stringify(getStateSnapshot(false))); return true; }
+    catch (e) { return false; }
+  }
+
+  let autosaveTimer = null;
+  let autosavePending = false;
+  let imagesDirty = false;
+  function scheduleAutosave(imagesChanged) {
+    autosavePending = true;
+    if (imagesChanged === true) imagesDirty = true;
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(flushAutosave, 300);
+  }
+  function flushAutosave() {
+    if (!autosavePending) return;
+    clearTimeout(autosaveTimer);
+    autosavePending = false;
+    const textOk = saveTextTo(AUTOSAVE_KEY);
+    if (imagesDirty) {
+      imagesDirty = false;
+      idbSet(AUTOSAVE_IMG_KEY, getImageSnapshot())
+        .then(() => { if (textOk) autosaveStatus.textContent = ''; })
+        .catch(() => { autosaveStatus.textContent = MSG_IMG_FAIL; });
+    }
+    if (!textOk) autosaveStatus.textContent = MSG_TEXT_FAIL;
+  }
+  // ブラウザバック・タブ切替・閉じる直前に、保留中の保存を確定させる
+  window.addEventListener('pagehide', flushAutosave);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushAutosave(); });
+
+  // クリア直前の内容を退避（文字・設定はlocalStorage、画像はIndexedDB）
+  function saveBackup() {
+    saveTextTo(BACKUP_KEY);
+    idbSet(BACKUP_IMG_KEY, getImageSnapshot()).catch(() => { /* image backup unavailable */ });
+  }
+
+  // 保存済みの内容を復元する。文字・設定は即時、画像はIndexedDBから読み込み次第反映する
+  function restoreFrom(textKey, imgKey, onDone, onlyIfEmpty) {
+    const saved = localStorage.getItem(textKey);
+    if (!saved) return false;
+    const text = JSON.parse(saved);
+    applyTextState(text);
+    idbGet(imgKey).catch(() => null).then(stored => {
+      let imgs = stored;
+      let legacy = false;
+      if (!imgs && (text.imageDataUrl || (text.qrImages || []).some(Boolean))) { imgs = text; legacy = true; } // 旧形式（画像もlocalStorageに保存）からの移行
+      applyImageState(imgs || {}, () => {
+        if (legacy) scheduleAutosave(true);
+        if (onDone) onDone();
+      }, onlyIfEmpty);
+    });
+    return true;
+  }
+
+  function updateRestoreButtonVisibility() {
+    let has = false;
+    try { has = !!localStorage.getItem(BACKUP_KEY); } catch (e) { has = false; }
+    btnRestoreBackup.style.display = has ? 'block' : 'none';
+  }
+
+  // フォーム内の入力・変更はすべて自動保存の対象にする（画像の保存は画像読み込み完了時に別途行う）
+  const formAreaEl = document.getElementById('form-area');
+  formAreaEl.addEventListener('input', () => scheduleAutosave());
+  formAreaEl.addEventListener('change', () => scheduleAutosave());
+
+  btnExportJson.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(getStateSnapshot(true), null, 2)], { type: 'application/json' });
     downloadBlob(blob, sanitizeFilename(inputTitle.value || '本文カード') + '.json');
   });
 
@@ -908,50 +1090,26 @@
     reader.onload = ev => {
       try {
         const data = JSON.parse(ev.target.result);
-        inputCatch.value = data.catch || '';
-        inputTitle.value = data.title || '';
-        inputFreeText.value = data.freeText || '';
-        inputPriceNormal.value = data.priceNormal || YEN_DEFAULT;
-        inputPriceEvent.value = data.priceEvent || YEN_DEFAULT;
-        (data.qrLabels || []).forEach((v, i) => { if (qrLabelInputs[i]) qrLabelInputs[i].value = v; });
-        inputSynopsis.value = data.synopsis || '';
-        inputR18.checked = !!data.r18;
-        if (data.font) inputFont.value = data.font;
-        if (data.bgColor) inputCardColor.value = data.bgColor;
-        if (data.fontColor) inputFontColor.value = data.fontColor;
-        if (data.imageZoom) inputZoom.value = data.imageZoom;
-        imgDragX = data.imgDragX || 0; imgDragY = data.imgDragY || 0;
-        if (data.layout) layout = data.layout;
-        updateTitleStatus();
-        updateFreeTextStatus();
-
-        const loaders = [];
-        if (data.imageDataUrl) {
-          loaders.push(new Promise(res => {
-            const img = new Image();
-            img.onload = () => { uploadedImage = img; res(); };
-            img.src = data.imageDataUrl;
-          }));
-        }
-        (data.qrImages || []).forEach((src, i) => {
-          if (src) {
-            loaders.push(new Promise(res => {
-              const img = new Image();
-              img.onload = () => { qrImages[i] = img; res(); };
-              img.src = src;
-            }));
-          }
-        });
-        updateCharCount();
-        drawCard();
-        jsonStatus.textContent = '読み込みました。';
-        Promise.all(loaders).then(() => drawCard());
+        applyStateSnapshot(data, () => { jsonStatus.textContent = '読み込みました。'; scheduleAutosave(true); });
       } catch (err) {
         jsonStatus.textContent = 'JSONの読み込みに失敗しました：' + err.message;
       }
     };
     reader.readAsText(file);
   });
+
+  btnRestoreBackup.addEventListener('click', () => {
+    try { restoreFrom(BACKUP_KEY, BACKUP_IMG_KEY, () => scheduleAutosave(true), false); }
+    catch (e) { /* nothing to restore */ }
+  });
+  inputAutoRestore.addEventListener('change', () => setAutoRestorePref(inputAutoRestore.checked));
+  btnLoadAutosave.addEventListener('click', () => {
+    try {
+      const ok = restoreFrom(AUTOSAVE_KEY, AUTOSAVE_IMG_KEY, () => { autosaveStatus.textContent = '読み込みました。'; }, false);
+      if (!ok) autosaveStatus.textContent = '保存されている内容がありません。';
+    } catch (e) { autosaveStatus.textContent = '読み込みに失敗しました。'; }
+  });
+  updateRestoreButtonVisibility();
 
   function openZoomPreview() {
     previewZoomImg.src = canvas.toDataURL('image/png');
@@ -962,7 +1120,18 @@
   btnCloseZoom.addEventListener('click', closeZoomPreview);
   previewZoomOverlay.addEventListener('click', e => { if (e.target === previewZoomOverlay) closeZoomPreview(); });
 
-  refreshAll();
+  try {
+    inputAutoRestore.checked = getAutoRestorePref();
+    const saved = localStorage.getItem(AUTOSAVE_KEY);
+    if (saved && inputAutoRestore.checked) {
+      restoreFrom(AUTOSAVE_KEY, AUTOSAVE_IMG_KEY, () => { autosaveStatus.textContent = '（前回の内容を自動復元しました）'; }, true);
+    } else {
+      refreshAll();
+      if (saved) autosaveStatus.textContent = '（保存内容があります。「保存内容を読み込む」から復元できます）';
+    }
+  } catch (e) {
+    refreshAll();
+  }
   document.fonts.ready.then(refreshAll);
 </script>
 </body>

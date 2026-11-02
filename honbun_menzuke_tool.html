@@ -129,9 +129,15 @@
 <body>
 <div class="app-container">
   <h1>掌カタログ 本文面付ツール</h1>
-  <p class="note">アップロードした画像はこのページ内でのみ使用され、送信・保存は行われません。</p>
+  <p class="note">アップロードした画像はこのページ内でのみ使用され、外部への送信は行われません（保存先はこのブラウザ内のみです）。</p>
   <p class="note">本文カード作成ツールで書き出したカード画像（PNG）を、ページ1から順にアップロードしてください。4の倍数（4／8／12／16ページ）に対応しています。</p>
   <p class="note">使い方に迷ったら、HS書架様の <a href="https://note.com/hs_syoka/n/n90b6101dbedb" target="_blank" rel="noopener">「カタログの作り方」のページ ↗</a> もご参考ください。</p>
+  <p class="note">入力内容（アップロードした画像・並び順・設定）はこのブラウザ内に自動保存されます（他の端末とは共有されません）。環境によっては自動保存されないことがあります。<span id="autosaveStatus"></span></p>
+  <div class="checkbox-row" style="width:100%;">
+    <input type="checkbox" id="inputAutoRestore" checked>
+    <label for="inputAutoRestore">次回このページを開いたときに自動で復元する</label>
+    <button type="button" id="btnLoadAutosave" class="btn btn-outline" style="width:auto; margin:0 0 0 auto; padding:6px 12px;">保存内容を読み込む</button>
+  </div>
 
   <div class="panel">
     <p class="panel-title">ページ画像のアップロード・並べ替え</p>
@@ -195,7 +201,7 @@
   </div>
 
   <footer>掌カタログ 本文面付ツール　｜　<a href="https://kanashiki1979.github.io/terms/" target="_blank" rel="noopener">制作・イベント支援ツール</a></footer>
-  <div class="ver-info">Ver. 2026/11/01 16:40</div>
+  <div class="ver-info">Ver:202611021106</div>
 
   <div class="usage-notice">
     <div class="usage-notice-text">
@@ -230,6 +236,9 @@
   const formatPdf = document.getElementById('formatPdf');
   const previewPanel = document.getElementById('previewPanel');
   const previewContent = document.getElementById('previewContent');
+  const autosaveStatus = document.getElementById('autosaveStatus');
+  const inputAutoRestore = document.getElementById('inputAutoRestore');
+  const btnLoadAutosave = document.getElementById('btnLoadAutosave');
 
   let pages = []; // { img: Image, name: string }
   let blankImage = null;
@@ -300,16 +309,16 @@
       const up = document.createElement('button');
       up.type = 'button'; up.className = 'btn btn-outline btn-small'; up.textContent = '↑';
       up.disabled = i === 0;
-      up.addEventListener('click', () => { [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]]; refreshAll(); });
+      up.addEventListener('click', () => { [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]]; refreshAll(); scheduleAutosave(true); });
 
       const down = document.createElement('button');
       down.type = 'button'; down.className = 'btn btn-outline btn-small'; down.textContent = '↓';
       down.disabled = i === pages.length - 1;
-      down.addEventListener('click', () => { [pages[i + 1], pages[i]] = [pages[i], pages[i + 1]]; refreshAll(); });
+      down.addEventListener('click', () => { [pages[i + 1], pages[i]] = [pages[i], pages[i + 1]]; refreshAll(); scheduleAutosave(true); });
 
       const del = document.createElement('button');
       del.type = 'button'; del.className = 'btn btn-outline btn-small'; del.textContent = '削除';
-      del.addEventListener('click', () => { pages.splice(i, 1); refreshAll(); });
+      del.addEventListener('click', () => { pages.splice(i, 1); refreshAll(); scheduleAutosave(true); });
 
       ops.appendChild(up); ops.appendChild(down); ops.appendChild(del);
       li.appendChild(thumb); li.appendChild(label); li.appendChild(ops);
@@ -584,8 +593,8 @@
     flowNoteJpg.style.display = isPdf ? 'none' : '';
     flowNotePdf.style.display = isPdf ? '' : 'none';
   }
-  formatJpg.addEventListener('change', updateFormatUI);
-  formatPdf.addEventListener('change', updateFormatUI);
+  formatJpg.addEventListener('change', () => { updateFormatUI(); scheduleAutosave(); });
+  formatPdf.addEventListener('change', () => { updateFormatUI(); scheduleAutosave(); });
   updateFormatUI();
 
   function renderPreview() {
@@ -645,6 +654,7 @@
     Promise.all(loaders).then(results => {
       results.forEach(r => { if (r) pages.push(r); });
       refreshAll();
+      scheduleAutosave(true);
       if (failedNames.length) {
         countStatus.textContent = (countStatus.textContent || '') + '　※読み込めなかったファイル：' + failedNames.join('、');
         countStatus.className = 'status-text status-ng';
@@ -653,12 +663,159 @@
     inputFiles.value = '';
   });
 
-  inputPadBlank.addEventListener('change', refreshAll);
-  inputShowPageNum.addEventListener('change', refreshAll);
-  inputShowRuler.addEventListener('change', refreshAll);
-  inputCutGuideNone.addEventListener('change', refreshAll);
-  inputCutGuideFull.addEventListener('change', refreshAll);
-  inputCutGuideCorner.addEventListener('change', refreshAll);
+  inputPadBlank.addEventListener('change', () => { refreshAll(); scheduleAutosave(); });
+  inputShowPageNum.addEventListener('change', () => { refreshAll(); scheduleAutosave(); });
+  inputShowRuler.addEventListener('change', () => { refreshAll(); scheduleAutosave(); });
+  inputCutGuideNone.addEventListener('change', () => { refreshAll(); scheduleAutosave(); });
+  inputCutGuideFull.addEventListener('change', () => { refreshAll(); scheduleAutosave(); });
+  inputCutGuideCorner.addEventListener('change', () => { refreshAll(); scheduleAutosave(); });
+
+  // ===== 自動保存：設定はlocalStorageに即時保存、ページ画像はIndexedDBに保存 =====
+  const OPTIONS_KEY = 'tewara_honbun_menzuke_options_v1';
+  const AUTORESTORE_PREF_KEY = 'tewara_honbun_menzuke_autorestore_pref';
+  const IDB_NAME = 'tewara_honbun_menzuke';
+  const IDB_STORE = 'kv';
+  const PAGES_KEY = 'pages_v1';
+
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+      req.onblocked = () => reject(new Error('blocked'));
+    });
+  }
+  function idbSet(key, value) {
+    return idbOpen().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = tx.onabort = () => { db.close(); reject(tx.error); };
+    }));
+  }
+  function idbGet(key) {
+    return idbOpen().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => { db.close(); resolve(req.result); };
+      req.onerror = () => { db.close(); reject(req.error); };
+    }));
+  }
+
+  function getAutoRestorePref() {
+    try { const v = localStorage.getItem(AUTORESTORE_PREF_KEY); return v === null ? true : v === '1'; }
+    catch (e) { return true; }
+  }
+  function setAutoRestorePref(v) {
+    try { localStorage.setItem(AUTORESTORE_PREF_KEY, v ? '1' : '0'); } catch (e) { /* storage unavailable: skip silently */ }
+  }
+
+  function getOptionsSnapshot() {
+    return {
+      padBlank: inputPadBlank.checked,
+      showPageNum: inputShowPageNum.checked,
+      showRuler: inputShowRuler.checked,
+      format: formatJpg.checked ? 'jpg' : 'pdf',
+      cutGuide: inputCutGuideNone.checked ? 'none' : (inputCutGuideFull.checked ? 'full' : 'corner')
+    };
+  }
+  function getPagesSnapshot() {
+    return pages.map(p => ({ name: p.name, dataUrl: p.img.src }));
+  }
+
+  function applyOptions(data) {
+    inputPadBlank.checked = !!data.padBlank;
+    inputShowPageNum.checked = data.showPageNum !== false;
+    inputShowRuler.checked = data.showRuler !== false;
+    if (data.format === 'jpg') formatJpg.checked = true; else formatPdf.checked = true;
+    if (data.cutGuide === 'none') inputCutGuideNone.checked = true;
+    else if (data.cutGuide === 'full') inputCutGuideFull.checked = true;
+    else inputCutGuideCorner.checked = true;
+    updateFormatUI();
+    refreshAll();
+  }
+
+  // onlyIfEmpty=true: すでにページが入っている場合は上書きしない（起動時の自動復元用）
+  function applyPages(list, onDone, onlyIfEmpty) {
+    if (onlyIfEmpty && pages.length > 0) return;
+    const failed = [];
+    const loaders = (list || []).map(p => new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve({ img, name: p.name });
+      img.onerror = () => { failed.push(p.name); resolve(null); };
+      img.src = p.dataUrl;
+    }));
+    Promise.all(loaders).then(results => {
+      if (onlyIfEmpty && pages.length > 0) return;
+      pages = results.filter(Boolean);
+      refreshAll();
+      if (failed.length) autosaveStatus.textContent = '（一部の画像を復元できませんでした：' + failed.join('、') + '）';
+      else if (onDone) onDone();
+    });
+  }
+
+  const MSG_IMG_FAIL = '（画像を自動保存できませんでした。ブラウザの設定やプライベートモードをご確認ください。設定のみ保存しています）';
+  const MSG_OPT_FAIL = '（自動保存できませんでした）';
+
+  function saveOptions() {
+    try { localStorage.setItem(OPTIONS_KEY, JSON.stringify(getOptionsSnapshot())); return true; }
+    catch (e) { return false; }
+  }
+
+  let autosaveTimer = null;
+  let autosavePending = false;
+  let pagesDirty = false;
+  function scheduleAutosave(pagesChanged) {
+    autosavePending = true;
+    if (pagesChanged === true) pagesDirty = true;
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(flushAutosave, 300);
+  }
+  function flushAutosave() {
+    if (!autosavePending) return;
+    clearTimeout(autosaveTimer);
+    autosavePending = false;
+    const optOk = saveOptions();
+    if (pagesDirty) {
+      pagesDirty = false;
+      idbSet(PAGES_KEY, getPagesSnapshot())
+        .then(() => { if (optOk) autosaveStatus.textContent = ''; })
+        .catch(() => { autosaveStatus.textContent = MSG_IMG_FAIL; });
+    }
+    if (!optOk) autosaveStatus.textContent = MSG_OPT_FAIL;
+  }
+  // ブラウザバック・タブ切替・閉じる直前に、保留中の保存を確定させる
+  window.addEventListener('pagehide', flushAutosave);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushAutosave(); });
+
+  // 保存済みの内容を復元する。設定は即時、ページ画像はIndexedDBから読み込み次第反映する
+  function restoreSaved(onDone, onlyIfEmpty) {
+    let hasAny = false;
+    try {
+      const saved = localStorage.getItem(OPTIONS_KEY);
+      if (saved) { applyOptions(JSON.parse(saved)); hasAny = true; }
+    } catch (e) { /* ignore broken options */ }
+    idbGet(PAGES_KEY).catch(() => null).then(list => {
+      if (list && list.length) { applyPages(list, onDone, onlyIfEmpty); }
+      else if (hasAny && onDone) onDone();
+      else if (!hasAny) autosaveStatus.textContent = onlyIfEmpty ? '' : '保存されている内容がありません。';
+    });
+  }
+
+  inputAutoRestore.checked = getAutoRestorePref();
+  inputAutoRestore.addEventListener('change', () => setAutoRestorePref(inputAutoRestore.checked));
+  btnLoadAutosave.addEventListener('click', () => {
+    restoreSaved(() => { autosaveStatus.textContent = '読み込みました。'; }, false);
+  });
+  if (inputAutoRestore.checked) {
+    restoreSaved(() => { autosaveStatus.textContent = '（前回の内容を自動復元しました）'; }, true);
+  } else {
+    idbGet(PAGES_KEY).then(list => {
+      if (list && list.length) autosaveStatus.textContent = '（保存内容があります。「保存内容を読み込む」から復元できます）';
+    }).catch(() => { /* IndexedDB unavailable: skip silently */ });
+  }
 
   updateStatus();
 </script>
